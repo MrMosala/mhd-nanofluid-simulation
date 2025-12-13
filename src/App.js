@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import { 
-  Zap, Thermometer, Wind, Settings, Play, Image, Video, BookOpen, 
-  Droplets, Magnet, ArrowRight, Gauge, Activity, Layers, BarChart3,
-  Github, ExternalLink, ChevronRight, Info
+  Zap, Thermometer, Play, Image, Video, BookOpen, 
+  Droplets, Magnet, Gauge, Activity, Layers, BarChart3, Info
 } from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════════════════════
