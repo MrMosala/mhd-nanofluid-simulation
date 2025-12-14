@@ -857,11 +857,17 @@ function App() {
           <div className="comparison-grid">
             <div className="comparison-card">
               <h4>Configuration A (Current)</h4>
-              <ResultsPanel sol={solution} />
+              <ResultsPanel sol={solution} label=" (A)" />
+              <div className="comparison-sliders">
+                <ParameterSlider label="Ha" value={params.Ha} onChange={(v) => updateParam('Ha', v)} min={0} max={10} step={0.1} unit="" />
+                <ParameterSlider label="Re" value={params.Re} onChange={(v) => updateParam('Re', v)} min={0.1} max={5} step={0.1} unit="" />
+                <ParameterSlider label="Ec" value={params.Ec} onChange={(v) => updateParam('Ec', v)} min={0} max={0.2} step={0.005} unit="" />
+                <ParameterSlider label="Bi" value={params.Bi} onChange={(v) => updateParam('Bi', v)} min={0.1} max={5} step={0.1} unit="" />
+              </div>
             </div>
             <div className="comparison-card">
               <h4>Configuration B (Compare)</h4>
-              <ResultsPanel sol={compareSolution} />
+              <ResultsPanel sol={compareSolution} label=" (B)" />
               <div className="comparison-sliders">
                 <ParameterSlider label="Ha" value={compareParams.Ha} onChange={(v) => updateCompareParam('Ha', v)} min={0} max={10} step={0.1} unit="" />
                 <ParameterSlider label="Re" value={compareParams.Re} onChange={(v) => updateCompareParam('Re', v)} min={0.1} max={5} step={0.1} unit="" />
@@ -905,10 +911,18 @@ function App() {
         <div className="chart-header">
           <span className="dot"></span>
           <h3>Velocity Profile W(η)</h3>
+          {compareMode && (
+            <span className="ai-badge" style={{ marginLeft: 'auto', fontSize: '0.7rem', padding: '2px 8px' }}>
+              Compare Mode Active
+            </span>
+          )}
         </div>
         <div className="chart-wrapper">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={solution.chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+            <LineChart 
+              data={solution.chartData} 
+              margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
               <XAxis 
                 dataKey="eta" 
@@ -922,9 +936,25 @@ function App() {
                 label={{ value: 'W (velocity)', angle: -90, position: 'insideLeft', fill: '#00d4ff' }}
               />
               <Tooltip content={<CustomTooltip />} />
-              <Line type="monotone" dataKey="W" stroke="#00d4ff" strokeWidth={3} dot={false} name="Velocity W" />
+              <Line 
+                type="monotone" 
+                dataKey="W" 
+                stroke="#00d4ff" 
+                strokeWidth={3} 
+                dot={false} 
+                name="Velocity W (Current)" 
+              />
               {compareMode && compareSolution && (
-                <Line type="monotone" data={compareSolution.chartData} dataKey="W" stroke="#ff006e" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Compare W" />
+                <Line 
+                  type="monotone" 
+                  data={compareSolution.chartData} 
+                  dataKey="W" 
+                  stroke="#ff006e" 
+                  strokeWidth={3} 
+                  strokeDasharray="5 5" 
+                  dot={false} 
+                  name="Velocity W (Compare)" 
+                />
               )}
             </LineChart>
           </ResponsiveContainer>
@@ -939,12 +969,34 @@ function App() {
           </div>
           <div className="chart-wrapper" style={{ height: '280px' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={solution.chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+              <LineChart 
+                data={solution.chartData} 
+                margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                 <XAxis dataKey="eta" stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 11 }} />
                 <YAxis stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 11 }} />
                 <Tooltip content={<CustomTooltip />} />
-                <Line type="monotone" dataKey="Wp" stroke="#00ff9f" strokeWidth={2} dot={false} name="Velocity Gradient W'" />
+                <Line 
+                  type="monotone" 
+                  dataKey="Wp" 
+                  stroke="#00ff9f" 
+                  strokeWidth={2} 
+                  dot={false} 
+                  name="Velocity Gradient W' (Current)" 
+                />
+                {compareMode && compareSolution && (
+                  <Line 
+                    type="monotone" 
+                    data={compareSolution.chartData} 
+                    dataKey="Wp" 
+                    stroke="#ff006e" 
+                    strokeWidth={2} 
+                    strokeDasharray="5 5" 
+                    dot={false} 
+                    name="Velocity Gradient W' (Compare)" 
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -954,23 +1006,41 @@ function App() {
           <h4><TrendingUp size={18} /> Key Velocity Metrics</h4>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
             <div className="result-card cyan">
-              <div className="label">Max Velocity</div>
+              <div className="label">Max Velocity (Current)</div>
               <div className="value">{solution.maxW.toFixed(4)}</div>
             </div>
-            <div className="result-card emerald">
-              <div className="label">W'(0)</div>
-              <div className="value">{solution.Wp[0].toFixed(4)}</div>
-            </div>
+            {compareMode && compareSolution && (
+              <div className="result-card magenta">
+                <div className="label">Max Velocity (Compare)</div>
+                <div className="value">{compareSolution.maxW.toFixed(4)}</div>
+              </div>
+            )}
           </div>
           
           <h4><Info size={18} /> Skin Friction Coefficient</h4>
           <p>The skin friction is calculated as:</p>
           <div className="equation-inline">Cf = A₁ × dW/dη</div>
           <p style={{ marginTop: '0.5rem' }}>
-            At the lower plate: <strong style={{color: 'var(--accent-cyan)'}}>Cf = {solution.Cf_lower.toFixed(4)}</strong>
+            At the lower plate: 
+            <span style={{ color: 'var(--accent-cyan)', marginLeft: '0.5rem', fontWeight: 'bold' }}>
+              Cf = {solution.Cf_lower.toFixed(4)}
+            </span>
+            {compareMode && compareSolution && (
+              <span style={{ color: 'var(--accent-magenta)', marginLeft: '1rem', fontWeight: 'bold' }}>
+                Compare: {compareSolution.Cf_lower.toFixed(4)}
+              </span>
+            )}
           </p>
           <p>
-            At the upper plate: <strong style={{color: 'var(--accent-magenta)'}}>Cf = {solution.Cf_upper.toFixed(4)}</strong>
+            At the upper plate: 
+            <span style={{ color: 'var(--accent-magenta)', marginLeft: '0.5rem', fontWeight: 'bold' }}>
+              Cf = {solution.Cf_upper.toFixed(4)}
+            </span>
+            {compareMode && compareSolution && (
+              <span style={{ color: 'var(--accent-magenta)', marginLeft: '1rem', fontWeight: 'bold' }}>
+                Compare: {compareSolution.Cf_upper.toFixed(4)}
+              </span>
+            )}
           </p>
         </div>
       </div>
@@ -1015,6 +1085,11 @@ function App() {
         <div className="chart-header">
           <span className="dot magenta"></span>
           <h3>Temperature Profile θ(η)</h3>
+          {compareMode && (
+            <span className="ai-badge" style={{ marginLeft: 'auto', fontSize: '0.7rem', padding: '2px 8px' }}>
+              Compare Mode Active
+            </span>
+          )}
         </div>
         <div className="chart-wrapper">
           <ResponsiveContainer width="100%" height="100%">
@@ -1038,7 +1113,19 @@ function App() {
                 label={{ value: 'θ (temperature)', angle: -90, position: 'insideLeft', fill: '#ff006e' }}
               />
               <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="Theta" stroke="#ff006e" strokeWidth={3} fill="url(#tempGradient)" name="Temperature θ" />
+              <Area type="monotone" dataKey="Theta" stroke="#ff006e" strokeWidth={3} fill="url(#tempGradient)" name="Temperature θ (Current)" />
+              {compareMode && compareSolution && (
+                <Area 
+                  type="monotone" 
+                  data={compareSolution.chartData} 
+                  dataKey="Theta" 
+                  stroke="#ffd700" 
+                  strokeWidth={2} 
+                  strokeDasharray="5 5" 
+                  fill="transparent"
+                  name="Temperature θ (Compare)" 
+                />
+              )}
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -1057,7 +1144,19 @@ function App() {
                 <XAxis dataKey="eta" stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 11 }} />
                 <YAxis stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 11 }} />
                 <Tooltip content={<CustomTooltip />} />
-                <Line type="monotone" dataKey="Thetap" stroke="#ffd700" strokeWidth={2} dot={false} name="Temperature Gradient θ'" />
+                <Line type="monotone" dataKey="Thetap" stroke="#ffd700" strokeWidth={2} dot={false} name="Temperature Gradient θ' (Current)" />
+                {compareMode && compareSolution && (
+                  <Line 
+                    type="monotone" 
+                    data={compareSolution.chartData} 
+                    dataKey="Thetap" 
+                    stroke="#00ff9f" 
+                    strokeWidth={2} 
+                    strokeDasharray="5 5" 
+                    dot={false} 
+                    name="Temperature Gradient θ' (Compare)" 
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -1067,23 +1166,41 @@ function App() {
           <h4><Thermometer size={18} /> Temperature Statistics</h4>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
             <div className="result-card magenta">
-              <div className="label">Max θ</div>
+              <div className="label">Max θ (Current)</div>
               <div className="value">{solution.maxTheta.toFixed(4)}</div>
             </div>
-            <div className="result-card gold">
-              <div className="label">Min θ</div>
-              <div className="value">{solution.minTheta.toFixed(4)}</div>
-            </div>
+            {compareMode && compareSolution && (
+              <div className="result-card gold">
+                <div className="label">Max θ (Compare)</div>
+                <div className="value">{compareSolution.maxTheta.toFixed(4)}</div>
+              </div>
+            )}
           </div>
           
           <h4><Info size={18} /> Nusselt Number</h4>
           <p>Heat transfer rate at the walls:</p>
           <div className="equation-inline">Nu = -A₃ × dθ/dη</div>
           <p style={{ marginTop: '0.5rem' }}>
-            At the lower plate: <strong style={{color: 'var(--accent-gold)'}}>Nu = {solution.Nu_lower.toFixed(4)}</strong>
+            At the lower plate: 
+            <span style={{ color: 'var(--accent-gold)', marginLeft: '0.5rem', fontWeight: 'bold' }}>
+              Nu = {solution.Nu_lower.toFixed(4)}
+            </span>
+            {compareMode && compareSolution && (
+              <span style={{ color: 'var(--accent-emerald)', marginLeft: '1rem', fontWeight: 'bold' }}>
+                Compare: {compareSolution.Nu_lower.toFixed(4)}
+              </span>
+            )}
           </p>
           <p>
-            At the upper plate: <strong style={{color: 'var(--accent-emerald)'}}>Nu = {solution.Nu_upper.toFixed(4)}</strong>
+            At the upper plate: 
+            <span style={{ color: 'var(--accent-emerald)', marginLeft: '0.5rem', fontWeight: 'bold' }}>
+              Nu = {solution.Nu_upper.toFixed(4)}
+            </span>
+            {compareMode && compareSolution && (
+              <span style={{ color: 'var(--accent-emerald)', marginLeft: '1rem', fontWeight: 'bold' }}>
+                Compare: {compareSolution.Nu_upper.toFixed(4)}
+              </span>
+            )}
           </p>
         </div>
       </div>
@@ -1134,6 +1251,11 @@ function App() {
         <div className="chart-header">
           <span className="dot gold"></span>
           <h3>Entropy Generation Components Ns(η)</h3>
+          {compareMode && (
+            <span className="ai-badge" style={{ marginLeft: 'auto', fontSize: '0.7rem', padding: '2px 8px' }}>
+              Compare Mode Active
+            </span>
+          )}
         </div>
         <div className="chart-wrapper">
           <ResponsiveContainer width="100%" height="100%">
@@ -1182,7 +1304,19 @@ function App() {
               <XAxis dataKey="eta" stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }} />
               <YAxis domain={[0, 1]} stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }} />
               <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="Be" stroke="#00ff9f" strokeWidth={2} fill="url(#bejanGrad)" name="Bejan Number Be" />
+              <Area type="monotone" dataKey="Be" stroke="#00ff9f" strokeWidth={2} fill="url(#bejanGrad)" name="Bejan Number Be (Current)" />
+              {compareMode && compareSolution && (
+                <Area 
+                  type="monotone" 
+                  data={compareSolution.chartData} 
+                  dataKey="Be" 
+                  stroke="#ff006e" 
+                  strokeWidth={2} 
+                  strokeDasharray="5 5" 
+                  fill="transparent"
+                  name="Bejan Number Be (Compare)" 
+                />
+              )}
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -1224,6 +1358,11 @@ function App() {
           <span style={{ color: 'var(--accent-emerald)', fontFamily: 'JetBrains Mono', marginLeft: '0.5rem', fontSize: '1.1rem' }}>
             {solution.avgBe.toFixed(4)}
           </span>
+          {compareMode && compareSolution && (
+            <span style={{ color: 'var(--accent-magenta)', marginLeft: '1rem', fontWeight: 'bold' }}>
+              Compare: {compareSolution.avgBe.toFixed(4)}
+            </span>
+          )}
           {solution.avgBe > 0.5 ? 
             <span style={{ color: 'var(--accent-magenta)', marginLeft: '0.5rem' }}>(Heat transfer dominated)</span> : 
             <span style={{ color: 'var(--accent-cyan)', marginLeft: '0.5rem' }}>(Friction/Magnetic dominated)</span>
@@ -1235,6 +1374,11 @@ function App() {
           <span style={{ color: 'var(--accent-gold)', fontFamily: 'JetBrains Mono', marginLeft: '0.5rem' }}>
             {solution.avgNs.toFixed(6)}
           </span>
+          {compareMode && compareSolution && (
+            <span style={{ color: 'var(--accent-magenta)', marginLeft: '1rem', fontWeight: 'bold' }}>
+              Compare: {compareSolution.avgNs.toFixed(6)}
+            </span>
+          )}
         </p>
       </div>
     </div>
