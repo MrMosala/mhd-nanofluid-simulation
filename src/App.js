@@ -1714,10 +1714,15 @@ const renderVideos = () => (
     
     <div className="videos-grid">
       <div className="video-card">
-        <div className="video-placeholder">
-          <Video size={48} />
-          <p>Critical Heat Flux</p>
-          <span className="video-hint">public/videos/Critical_Heat_Flux.mp4</span>
+        <div className="video-player">
+          <video 
+            controls 
+            preload="metadata"
+            style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
+          >
+            <source src="/videos/Critical_Heat_Flux.mp4" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
         </div>
         <div className="video-info">
           <h3>Critical Heat Flux</h3>
@@ -1727,10 +1732,15 @@ const renderVideos = () => (
       </div>
       
       <div className="video-card">
-        <div className="video-placeholder">
-          <Video size={48} />
-          <p>Nanoparticles in Heat Transfer</p>
-          <span className="video-hint">public/videos/Nanaparticles.mp4</span>
+        <div className="video-player">
+          <video 
+            controls 
+            preload="metadata"
+            style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
+          >
+            <source src="/videos/Nanaparticles.mp4" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
         </div>
         <div className="video-info">
           <h3>Nanoparticles in Heat Transfer</h3>
@@ -1740,10 +1750,15 @@ const renderVideos = () => (
       </div>
       
       <div className="video-card">
-        <div className="video-placeholder">
-          <Video size={48} />
-          <p>Radiation Heat Transfer</p>
-          <span className="video-hint">public/videos/Heat_Transfer_Radiation.mp4</span>
+        <div className="video-player">
+          <video 
+            controls 
+            preload="metadata"
+            style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
+          >
+            <source src="/videos/Heat_Transfer_Radiation.mp4" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
         </div>
         <div className="video-info">
           <h3>Radiation Heat Transfer</h3>
@@ -1753,10 +1768,15 @@ const renderVideos = () => (
       </div>
       
       <div className="video-card">
-        <div className="video-placeholder">
-          <Video size={48} />
-          <p>Conduction & Convection</p>
-          <span className="video-hint">public/videos/Heat_Transfer_Conduction_Convection.mp4</span>
+        <div className="video-player">
+          <video 
+            controls 
+            preload="metadata"
+            style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
+          >
+            <source src="/videos/Heat_Transfer_Conduction_Convection.mp4" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
         </div>
         <div className="video-info">
           <h3>Conduction & Convection Heat Transfer</h3>
@@ -1766,10 +1786,15 @@ const renderVideos = () => (
       </div>
       
       <div className="video-card">
-        <div className="video-placeholder">
-          <Video size={48} />
-          <p>Entropy in Thermodynamics</p>
-          <span className="video-hint">public/videos/Entropy.mp4</span>
+        <div className="video-player">
+          <video 
+            controls 
+            preload="metadata"
+            style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
+          >
+            <source src="/videos/Entropy.mp4" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
         </div>
         <div className="video-info">
           <h3>Entropy in Thermodynamics</h3>
@@ -1779,10 +1804,15 @@ const renderVideos = () => (
       </div>
       
       <div className="video-card">
-        <div className="video-placeholder">
-          <Video size={48} />
-          <p>Fluid Mechanics Equations</p>
-          <span className="video-hint">public/videos/Fluid_Mechanics_Equations.mp4</span>
+        <div className="video-player">
+          <video 
+            controls 
+            preload="metadata"
+            style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
+          >
+            <source src="/videos/Fluid_Mechanics_Equations.mp4" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
         </div>
         <div className="video-info">
           <h3>Fluid Mechanics Equations</h3>
@@ -1791,7 +1821,6 @@ const renderVideos = () => (
         </div>
       </div>
     </div>
-    
   </div>
 );
   const renderFigures = () => (
