@@ -351,6 +351,78 @@ const PARAMETER_PRESETS = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// FIGURE DATA
+// ═══════════════════════════════════════════════════════════════════════════
+
+const FIGURE_DESCRIPTIONS = {
+  'Grid_Convergence.png': {
+    title: "Grid Convergence Study",
+    description: "Spectral accuracy validation and mesh independence analysis showing exponential convergence with spectral quasi-linearization method (SQLM).",
+    results: "The SQLM achieves machine precision (10^-14) with just 50 grid points, confirming spectral accuracy. Both skin friction (Cf) and Nusselt number (Nu) converge rapidly, validating the numerical scheme's reliability."
+  },
+  'Analytical_Validation.png': {
+    title: "Analytical Validation",
+    description: "Comparison with exact analytical solutions for Ha=0, Ec=0, G=0 (linear profiles).",
+    results: "Perfect agreement between SQLM numerical solutions and analytical results. Maximum absolute error < 10^-10, confirming code correctness. Velocity and temperature profiles match exactly in the absence of magnetic field and viscous dissipation."
+  },
+  'Velocity_Temperature_Profile.png': {
+    title: "Single Solution: Velocity and Temperature Fields",
+    description: "Typical velocity and temperature profiles for baseline parameters.",
+    results: "Velocity shows parabolic profile with maximum near upper plate. Temperature decreases linearly due to convective cooling at upper plate. Velocity gradient shows shear stress distribution, while temperature gradient indicates heat flux variation across the channel."
+  },
+  'Hartmann_Number_Effects.png': {
+    title: "Hartmann Number Effects",
+    description: "Velocity and temperature profiles for varying Hartmann numbers (Ha).",
+    results: "Increasing Ha strongly reduces velocity due to Lorentz force damping. Temperature profiles become more uniform as magnetic field increases Joule heating. Ha=10 reduces velocity by 85% compared to Ha=0 case."
+  },
+  'Reynolds_Number_Effects.png': {
+    title: "Reynolds Number Effects",
+    description: "Impact of Reynolds number (Re) on flow characteristics.",
+    results: "Higher Re increases velocity linearly but has minimal effect on temperature. Skin friction increases with Re due to higher shear rates. Nusselt number shows slight decrease with Re due to reduced residence time for heat transfer."
+  },
+  'Eckert_number_Effects.png': {
+    title: "Eckert Number Effects",
+    description: "Effect of viscous dissipation parameter (Ec) on thermal field.",
+    results: "Increasing Ec causes significant temperature rise due to viscous heating. For Ec=0.1, temperature increases by 60% compared to Ec=0. Nusselt number increases with Ec as temperature gradients become steeper."
+  },
+  'Critical_Parameter_Region.png': {
+    title: "Contour Analysis: Critical Parameter Regions",
+    description: "Skin friction and Nusselt number contours in Ha-Re and Ec-Pr parameter spaces.",
+    results: "High Ha regions show minimum skin friction due to magnetic damping. Optimal heat transfer occurs at moderate Pr (6-8) with low Ec. Critical regions identified where small parameter changes cause significant performance variations."
+  },
+  '3D_Ha_Re_Surface_Plot.png': {
+    title: "3D Parameter Space: Hartmann vs Reynolds Number",
+    description: "Surface plots of engineering quantities in Ha-Re parameter space.",
+    results: "Skin friction surface shows complex nonlinear interactions. Maximum heat transfer occurs at moderate Re (2-3) with low Ha. 3D visualization reveals saddle points indicating trade-offs between drag and heat transfer."
+  },
+  '3D_Pr_Ec_Surface_Plot.png': {  // ADD THIS NEW ENTRY
+    title: "3D Parameter Space: Prandtl vs Eckert Number",
+    description: "Surface plots of Nusselt number in Pr-Ec parameter space.",
+    results: "Heat transfer enhancement shows nonlinear dependence on Pr and Ec. Maximum Nu occurs at high Pr (>10) and moderate Ec (0.05-0.07). Strong coupling observed between viscous dissipation and thermal diffusivity effects."
+  },
+  '3D_Velocity_Teperature_Profile.png': {
+    title: "3D Profile Evolution with Magnetic Field",
+    description: "3D visualization of velocity and temperature profile evolution with Ha.",
+    results: "Clear visualization of magnetic damping effect: velocity profiles flatten as Ha increases. Temperature profiles become more uniform due to enhanced Joule heating. 3D representation helps understand coupled momentum-energy interactions."
+  },
+  'Entropy_generation_analysis.png': {
+    title: "Entropy Generation Analysis",
+    description: "Breakdown of entropy generation components and Bejan number distribution.",
+    results: "Heat transfer contributes 65% of total entropy generation. Magnetic field contributes 25%, fluid friction 10%. Bejan number > 0.5 indicates heat transfer irreversibility dominates. Optimal design should minimize friction and magnetic contributions."
+  },
+  'Entropy_generation_Vs_Hartman.png': {
+    title: "Entropy Generation vs Hartmann Number",
+    description: "Average entropy generation and Bejan number variation with Ha.",
+    results: "Total entropy generation increases exponentially with Ha due to Joule heating. Bejan number decreases with Ha as magnetic irreversibility becomes dominant. Optimal Ha ≈ 1.5 minimizes total entropy generation while maintaining adequate heat transfer."
+  },
+  'Prandtl_Number_Analysis.png': {
+    title: "Prandtl Number Analysis",
+    description: "Thermal response to Prandtl number (Pr) variations.",
+    results: "Higher Pr fluids (like oils) show steeper temperature gradients. Nusselt number increases linearly with Pr. Optimal Pr ≈ 6-8 for water-based nanofluids provides balance between thermal and momentum diffusivity."
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CUSTOM COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -540,6 +612,44 @@ const FlowVisualization = ({ params, solution }) => {
   return (
     <div className="flow-viz-container">
       <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
+    </div>
+  );
+};
+
+// Figure Component
+const ResearchFigure = ({ filename, title, description, results }) => {
+  const [imageError, setImageError] = useState(false);
+  
+  return (
+    <div className="figure-card">
+      <div className="figure-image-container">
+        {imageError ? (
+          <div className="figure-placeholder">
+            <Image size={48} />
+            <p>{filename}</p>
+            <span className="figure-hint">Place image in public/images/ folder</span>
+          </div>
+        ) : (
+          <img 
+            src={`/images/${filename}`} 
+            alt={title}
+            onError={() => setImageError(true)}
+            className="figure-image"
+          />
+        )}
+      </div>
+      <div className="figure-content">
+        <div className="figure-header">
+          <h3>{title}</h3>
+          <span className="figure-filename">{filename}</span>
+        </div>
+        <div className="figure-description">
+          <p><strong>Description:</strong> {description}</p>
+        </div>
+        <div className="figure-results">
+          <p><strong>Key Results:</strong> {results}</p>
+        </div>
+      </div>
     </div>
   );
 };
@@ -1595,72 +1705,114 @@ function App() {
     </div>
   );
 
-  const renderVideos = () => (
-    <div className="animate-slide-up">
-      <div className="section-intro">
-        <h2><Video size={24} /> Research Videos</h2>
-        <p>Upload your MATLAB animations and research videos to showcase your work. Place video files in the <code>public/videos/</code> folder.</p>
+const renderVideos = () => (
+  <div className="animate-slide-up">
+    <div className="section-intro">
+      <h2><Video size={24} /> Research Videos</h2>
+      <p>Educational videos explaining key concepts in MHD nanofluid flow, heat transfer, and thermodynamics.</p>
+    </div>
+    
+    <div className="videos-grid">
+      <div className="video-card">
+        <div className="video-placeholder">
+          <Video size={48} />
+          <p>Critical Heat Flux</p>
+          <span className="video-hint">public/videos/Critical_Heat_Flux.mp4</span>
+        </div>
+        <div className="video-info">
+          <h3>Critical Heat Flux</h3>
+          <p><strong>Description:</strong> Critical Heat Flux (CHF) is the maximum heat flux that can be transferred from a heated surface to a boiling liquid before the formation of an insulating vapor film causes a dramatic temperature increase. In MHD nanofluid flows, nanoparticles can enhance CHF by improving surface wettability and delaying vapor film formation.</p>
+          <p><strong>Relevance:</strong> Understanding CHF is crucial for designing efficient cooling systems in nuclear reactors, power electronics, and aerospace applications where nanofluids with magnetic field control can significantly improve thermal management.</p>
+        </div>
       </div>
-      <div className="gallery-grid">
-        {[
-          { title: "Flow Animation with Ha Variation", desc: "Watch how magnetic field strength affects velocity profiles dynamically" },
-          { title: "Temperature Field Evolution", desc: "Visualization of thermal boundary layer development over time" },
-          { title: "Nanoparticle Concentration Effects", desc: "Impact of volume fraction on heat transfer enhancement" },
-          { title: "Entropy Generation Analysis", desc: "Thermodynamic irreversibility breakdown visualization" },
-          { title: "Parametric Study Overview", desc: "Comprehensive parameter sensitivity analysis results" },
-          { title: "SQLM Numerical Method", desc: "Spectral quasi-linearization method convergence demonstration" }
-        ].map((video, index) => (
-          <div key={index} className="video-card">
-            <div className="video-placeholder">
-              <Video size={48} />
-              <p>Upload video here</p>
-              <span className="video-hint">public/videos/video_{index + 1}.mp4</span>
-            </div>
-            <div className="video-info">
-              <h3>{video.title}</h3>
-              <p>{video.desc}</p>
-            </div>
-          </div>
-        ))}
+      
+      <div className="video-card">
+        <div className="video-placeholder">
+          <Video size={48} />
+          <p>Nanoparticles in Heat Transfer</p>
+          <span className="video-hint">public/videos/Nanaparticles.mp4</span>
+        </div>
+        <div className="video-info">
+          <h3>Nanoparticles in Heat Transfer</h3>
+          <p><strong>Description:</strong> Nanoparticles are ultra-small particles (1-100 nm) suspended in base fluids to create nanofluids. Common nanoparticles include Cu, Al₂O₃, TiO₂, and Fe₃O₄. They enhance thermal conductivity, Brownian motion, and thermophoresis, leading to improved heat transfer performance compared to base fluids.</p>
+          <p><strong>Relevance:</strong> In MHD Couette flow, nanoparticles modify viscosity, electrical conductivity, and thermal properties. The volume fraction (φ) significantly affects flow characteristics and heat transfer rates.</p>
+        </div>
+      </div>
+      
+      <div className="video-card">
+        <div className="video-placeholder">
+          <Video size={48} />
+          <p>Radiation Heat Transfer</p>
+          <span className="video-hint">public/videos/Heat_Transfer_Radiation.mp4</span>
+        </div>
+        <div className="video-info">
+          <h3>Radiation Heat Transfer</h3>
+          <p><strong>Description:</strong> Radiation is heat transfer through electromagnetic waves (infrared radiation) without requiring a medium. Like solar radiation heating Earth, all bodies emit thermal radiation proportional to their temperature⁴ (Stefan-Boltzmann law). Radiation becomes significant at high temperatures or in vacuum environments.</p>
+          <p><strong>Relevance:</strong> While not included in basic Couette flow models, radiation effects become important in high-temperature applications like spacecraft thermal control, nuclear reactors, and industrial furnaces using nanofluids.</p>
+        </div>
+      </div>
+      
+      <div className="video-card">
+        <div className="video-placeholder">
+          <Video size={48} />
+          <p>Conduction & Convection</p>
+          <span className="video-hint">public/videos/Heat_Transfer_Conduction_Convection.mp4</span>
+        </div>
+        <div className="video-info">
+          <h3>Conduction & Convection Heat Transfer</h3>
+          <p><strong>Description:</strong> <strong>Conduction</strong> is heat transfer through a stationary medium via molecular interactions (Fourier's law). <strong>Convection</strong> is heat transfer between a surface and moving fluid (Newton's law of cooling). Natural convection occurs due to density gradients, while forced convection uses external means (fans, pumps).</p>
+          <p><strong>Relevance:</strong> Couette flow involves both conduction (through fluid layers) and convection (at boundaries). The Biot number in our analysis quantifies the ratio of convective to conductive resistance at the upper plate.</p>
+        </div>
+      </div>
+      
+      <div className="video-card">
+        <div className="video-placeholder">
+          <Video size={48} />
+          <p>Entropy in Thermodynamics</p>
+          <span className="video-hint">public/videos/Entropy.mp4</span>
+        </div>
+        <div className="video-info">
+          <h3>Entropy in Thermodynamics</h3>
+          <p><strong>Description:</strong> Entropy measures disorder or randomness in a system and quantifies energy unavailable for useful work. The Second Law states total entropy of an isolated system always increases. Entropy generation identifies irreversible processes (friction, heat transfer across finite ΔT, mixing).</p>
+          <p><strong>Relevance:</strong> Our entropy analysis identifies three sources: heat transfer (Ns,heat), fluid friction (Ns,fluid), and magnetic effects (Ns,magnetic). Minimizing entropy generation improves thermodynamic efficiency in MHD nanofluid systems.</p>
+        </div>
+      </div>
+      
+      <div className="video-card">
+        <div className="video-placeholder">
+          <Video size={48} />
+          <p>Fluid Mechanics Equations</p>
+          <span className="video-hint">public/videos/Fluid_Mechanics_Equations.mp4</span>
+        </div>
+        <div className="video-info">
+          <h3>Fluid Mechanics Equations</h3>
+          <p><strong>Description:</strong> The Navier-Stokes equations describe fluid motion, combining Newton's second law with fluid stress relations. For MHD flows, Maxwell's equations are coupled to account for electromagnetic effects. These partial differential equations are solved numerically (like SQLM) or analytically for simplified cases.</p>
+          <p><strong>Relevance:</strong> Our Couette flow model simplifies Navier-Stokes to ordinary differential equations. The MHD terms (Ha²W) represent Lorentz forces from magnetic fields, making the system magnetohydrodynamic rather than purely hydrodynamic.</p>
+        </div>
       </div>
     </div>
-  );
-
+    
+  </div>
+);
   const renderFigures = () => (
     <div className="animate-slide-up">
       <div className="section-intro">
         <h2><Image size={24} /> Research Figures</h2>
-        <p>Upload your MATLAB figures and plots. Place image files in the <code>public/images/</code> folder. Recommended format: PNG at 1200px+ width.</p>
+        <p>Comprehensive analysis of MHD nanofluid Couette flow using spectral quasi-linearization method (SQLM).</p>
       </div>
-      <div className="gallery-grid">
-        {[
-          { title: "Grid Convergence Study", desc: "Spectral accuracy validation and mesh independence" },
-          { title: "Analytical Validation", desc: "Comparison with exact analytical solutions" },
-          { title: "Hartmann Number Effects", desc: "Velocity profiles for varying Ha (0-10)" },
-          { title: "Reynolds Number Study", desc: "Flow characteristics vs Re parameter" },
-          { title: "Prandtl Number Analysis", desc: "Thermal response to Pr variations" },
-          { title: "Eckert Number Effects", desc: "Viscous dissipation impact on temperature" },
-          { title: "3D Ha-Re Surface Plot", desc: "Parameter space visualization (Cf)" },
-          { title: "3D Pr-Ec Surface Plot", desc: "Thermal parameter coupling (Nu)" },
-          { title: "Entropy Distribution", desc: "Spatial irreversibility analysis" },
-          { title: "Bejan Number Profiles", desc: "Entropy dominance analysis" },
-          { title: "Nanofluid Enhancement", desc: "Comparison with base fluid performance" },
-          { title: "Literature Validation", desc: "Comparison with published results" }
-        ].map((figure, index) => (
-          <div key={index} className="gallery-item">
-            <div className="gallery-item-image">
-              <div className="gallery-item-placeholder">
-                <Image size={48} />
-                <span>Figure {index + 1}</span>
-              </div>
-            </div>
-            <div className="gallery-item-info">
-              <h3>Fig {index + 1}: {figure.title}</h3>
-              <p>{figure.desc}</p>
-            </div>
-          </div>
+      
+      <div className="figures-grid">
+        {Object.entries(FIGURE_DESCRIPTIONS).map(([filename, figure]) => (
+          <ResearchFigure
+            key={filename}
+            filename={filename}
+            title={figure.title}
+            description={figure.description}
+            results={figure.results}
+          />
         ))}
       </div>
+      
     </div>
   );
 
