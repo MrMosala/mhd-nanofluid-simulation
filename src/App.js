@@ -5,9 +5,9 @@ import {
 import { 
   Zap, Thermometer, Play, Image, Video, BookOpen, 
   Droplets, Magnet, Gauge, Activity, Layers, BarChart3, Info,
-  Sliders, X, ChevronDown, Wind, TrendingUp, Brain, Target,
+  X, ChevronDown, Wind, TrendingUp, Brain, Target,
   Cpu, Download, Copy, Check, Sparkles, FlaskConical,
-  GitCompare, Lightbulb, Rocket, Award
+  GitCompare, Lightbulb, Rocket, Award, Settings
 } from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -450,27 +450,42 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
+// FIXED: Improved ParameterSlider with smooth dragging
 const ParameterSlider = ({ label, value, onChange, min, max, step, unit, description }) => {
+  const [tempValue, setTempValue] = useState(value);
+  
+  useEffect(() => {
+    setTempValue(value);
+  }, [value]);
+  
+  const handleChange = (e) => {
+    const newValue = parseFloat(e.target.value);
+    setTempValue(newValue);
+    // Update immediately for smoother experience
+    onChange(newValue);
+  };
+  
   return (
     <div className="slider-control">
       <div className="slider-label">
         <span title={description}>{label}</span>
-        <span className="slider-value">{value.toFixed(step < 0.01 ? 3 : 2)}{unit}</span>
+        <span className="slider-value">{tempValue.toFixed(step < 0.01 ? 3 : 2)}{unit}</span>
       </div>
       <input
         type="range"
         min={min}
         max={max}
         step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
+        value={tempValue}
+        onChange={handleChange}
+        className="smooth-slider"
       />
     </div>
   );
 };
 
-// Parameter Accordion Component
-const ParamAccordion = ({ title, icon: Icon, children, defaultOpen = false }) => {
+// Parameter Accordion Component - FIXED: Keep accordions open by default
+const ParamAccordion = ({ title, icon: Icon, children, defaultOpen = true }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   
   return (
@@ -865,7 +880,7 @@ function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Floating Controls Panel
+  // Floating Controls Panel - FIXED: All accordions open by default
   const FloatingControls = () => (
     <>
       <div className="floating-controls">
@@ -874,7 +889,7 @@ function App() {
           onClick={() => setControlsOpen(true)}
           aria-label="Open Parameters"
         >
-          <Sliders />
+          <Settings size={24} />
         </button>
       </div>
       
@@ -905,13 +920,13 @@ function App() {
             <ParameterSlider label="λ (Slip)" value={params.lambda} onChange={(v) => updateParam('lambda', v)} min={0} max={0.5} step={0.01} unit="" description="Slip parameter" />
           </ParamAccordion>
           
-          <ParamAccordion title="Thermal Parameters" icon={Thermometer}>
+          <ParamAccordion title="Thermal Parameters" icon={Thermometer} defaultOpen={true}>
             <ParameterSlider label="Pr (Prandtl)" value={params.Pr} onChange={(v) => updateParam('Pr', v)} min={0.7} max={20} step={0.1} unit="" description="Momentum to thermal diffusivity ratio" />
             <ParameterSlider label="Ec (Eckert)" value={params.Ec} onChange={(v) => updateParam('Ec', v)} min={0} max={0.2} step={0.005} unit="" description="Viscous dissipation parameter" />
             <ParameterSlider label="Bi (Biot)" value={params.Bi} onChange={(v) => updateParam('Bi', v)} min={0.1} max={5} step={0.1} unit="" description="Convective heat transfer" />
           </ParamAccordion>
           
-          <ParamAccordion title="Quick Actions" icon={Rocket}>
+          <ParamAccordion title="Quick Actions" icon={Rocket} defaultOpen={true}>
             <div className="quick-actions">
               <button className="action-btn" onClick={exportCSV}>
                 <Download size={16} /> Export CSV Data
@@ -922,6 +937,9 @@ function App() {
               </button>
               <button className="action-btn compare-btn" onClick={() => setCompareMode(!compareMode)}>
                 <GitCompare size={16} /> {compareMode ? 'Exit Compare' : 'Compare Mode'}
+              </button>
+              <button className="action-btn reset-btn" onClick={() => applyPreset('cu-water')}>
+                <Sparkles size={16} /> Reset to Default
               </button>
             </div>
           </ParamAccordion>
@@ -963,7 +981,15 @@ function App() {
       
       {compareMode && compareSolution && (
         <div className="comparison-section">
-          <h3 className="comparison-title"><GitCompare size={20} /> Comparison Mode Active</h3>
+          <div className="comparison-header">
+            <h3 className="comparison-title"><GitCompare size={20} /> Comparison Mode Active</h3>
+            <button 
+              className="exit-compare-btn"
+              onClick={() => setCompareMode(false)}
+            >
+              <X size={16} /> Exit Compare Mode
+            </button>
+          </div>
           <div className="comparison-grid">
             <div className="comparison-card">
               <h4>Configuration A (Current)</h4>
@@ -1022,9 +1048,16 @@ function App() {
           <span className="dot"></span>
           <h3>Velocity Profile W(η)</h3>
           {compareMode && (
-            <span className="ai-badge" style={{ marginLeft: 'auto', fontSize: '0.7rem', padding: '2px 8px' }}>
-              Compare Mode Active
-            </span>
+            <div className="compare-mode-indicator">
+              <span className="ai-badge">Compare Mode Active</span>
+              <button 
+                className="small-exit-btn"
+                onClick={() => setCompareMode(false)}
+                title="Exit Compare Mode"
+              >
+                <X size={12} />
+              </button>
+            </div>
           )}
         </div>
         <div className="chart-wrapper">
@@ -1196,9 +1229,16 @@ function App() {
           <span className="dot magenta"></span>
           <h3>Temperature Profile θ(η)</h3>
           {compareMode && (
-            <span className="ai-badge" style={{ marginLeft: 'auto', fontSize: '0.7rem', padding: '2px 8px' }}>
-              Compare Mode Active
-            </span>
+            <div className="compare-mode-indicator">
+              <span className="ai-badge">Compare Mode Active</span>
+              <button 
+                className="small-exit-btn"
+                onClick={() => setCompareMode(false)}
+                title="Exit Compare Mode"
+              >
+                <X size={12} />
+              </button>
+            </div>
           )}
         </div>
         <div className="chart-wrapper">
@@ -1362,9 +1402,16 @@ function App() {
           <span className="dot gold"></span>
           <h3>Entropy Generation Components Ns(η)</h3>
           {compareMode && (
-            <span className="ai-badge" style={{ marginLeft: 'auto', fontSize: '0.7rem', padding: '2px 8px' }}>
-              Compare Mode Active
-            </span>
+            <div className="compare-mode-indicator">
+              <span className="ai-badge">Compare Mode Active</span>
+              <button 
+                className="small-exit-btn"
+                onClick={() => setCompareMode(false)}
+                title="Exit Compare Mode"
+              >
+                <X size={12} />
+              </button>
+            </div>
           )}
         </div>
         <div className="chart-wrapper">
@@ -1852,75 +1899,77 @@ const renderVideos = () => (
         <p>Mathematical formulation of MHD nanofluid Couette flow with viscous dissipation and Joule heating.</p>
       </div>
       
-      <div className="equation-card">
-        <h3><Activity size={20} /> Momentum Equation</h3>
-        <div className="equation">A₁·W'' - A₂·Ha²·W + G = 0</div>
-        <p className="equation-description">
-          Describes the velocity distribution accounting for nanofluid viscosity enhancement (A₁), 
-          electromagnetic body force through Lorentz force (Ha²), and axial pressure gradient (G).
-          The Hartmann number Ha = B₀L√(σf/μf) represents the ratio of electromagnetic to viscous forces.
-        </p>
-      </div>
-      
-      <div className="equation-card">
-        <h3><Thermometer size={20} /> Energy Equation</h3>
-        <div className="equation">A₃·θ'' + A₁·Pr·Ec·(W')² + A₂·Pr·Ec·Ha²·W² = 0</div>
-        <p className="equation-description">
-          Includes thermal conduction enhanced by nanoparticles (A₃), viscous dissipation from fluid friction,
-          and Joule heating from the magnetic field interaction with the electrically conducting fluid.
-        </p>
-      </div>
-      
-      <div className="equation-card">
-        <h3><Layers size={20} /> Boundary Conditions</h3>
-        <div className="equation">
-          η = 0: W = 0, θ = 1 (Lower plate)<br/>
-          η = 1: W - λW' = Re, θ' + Bi·θ = 0 (Upper plate)
+      <div className="theory-grid">
+        <div className="equation-card">
+          <h3><Activity size={20} /> Momentum Equation</h3>
+          <div className="equation">A₁·W'' - A₂·Ha²·W + G = 0</div>
+          <p className="equation-description">
+            Describes the velocity distribution accounting for nanofluid viscosity enhancement (A₁), 
+            electromagnetic body force through Lorentz force (Ha²), and axial pressure gradient (G).
+            The Hartmann number Ha = B₀L√(σf/μf) represents the ratio of electromagnetic to viscous forces.
+          </p>
         </div>
-        <p className="equation-description">
-          Lower plate: No-slip condition with fixed temperature. Upper plate: Navier slip condition
-          with convective heat transfer (Robin boundary condition). The slip parameter λ accounts
-          for rarefied gas effects or hydrophobic surfaces.
-        </p>
-      </div>
-      
-      <div className="equation-card">
-        <h3><Gauge size={20} /> Engineering Quantities</h3>
-        <div className="equation">
-          Cf = A₁·(dW/dη)|wall — Skin Friction Coefficient<br/>
-          Nu = -A₃·(dθ/dη)|wall — Nusselt Number
+        
+        <div className="equation-card">
+          <h3><Thermometer size={20} /> Energy Equation</h3>
+          <div className="equation">A₃·θ'' + A₁·Pr·Ec·(W')² + A₂·Pr·Ec·Ha²·W² = 0</div>
+          <p className="equation-description">
+            Includes thermal conduction enhanced by nanoparticles (A₃), viscous dissipation from fluid friction,
+            and Joule heating from the magnetic field interaction with the electrically conducting fluid.
+          </p>
         </div>
-        <p className="equation-description">
-          Skin friction quantifies wall shear stress important for drag calculations.
-          Nusselt number represents the enhancement of convective heat transfer relative to pure conduction.
-        </p>
-      </div>
-      
-      <div className="equation-card">
-        <h3><BarChart3 size={20} /> Entropy Generation</h3>
-        <div className="equation">
-          Ns = A₃(θ')²/θ² + A₁·Ec·Pr·(W')²/θ + A₂·Ec·Pr·Ha²·W²/θ<br/>
-          Be = Ns,heat / Ns,total — Bejan Number
+        
+        <div className="equation-card">
+          <h3><Layers size={20} /> Boundary Conditions</h3>
+          <div className="equation">
+            η = 0: W = 0, θ = 1 (Lower plate)<br/>
+            η = 1: W - λW' = Re, θ' + Bi·θ = 0 (Upper plate)
+          </div>
+          <p className="equation-description">
+            Lower plate: No-slip condition with fixed temperature. Upper plate: Navier slip condition
+            with convective heat transfer (Robin boundary condition). The slip parameter λ accounts
+            for rarefied gas effects or hydrophobic surfaces.
+          </p>
         </div>
-        <p className="equation-description">
-          Total entropy generation from heat transfer irreversibility, fluid friction, and magnetic field effects.
-          Bejan number indicates the dominant source of irreversibility for thermodynamic optimization.
-        </p>
-      </div>
-      
-      <div className="equation-card full-width">
-        <h3><Droplets size={20} /> Nanofluid Property Correlations</h3>
-        <div className="equation-grid">
-          <div className="equation">ρnf = (1-φ)ρf + φρs</div>
-          <div className="equation">μnf = μf/(1-φ)^2.5 (Brinkman)</div>
-          <div className="equation">(ρCp)nf = (1-φ)(ρCp)f + φ(ρCp)s</div>
-          <div className="equation">knf/kf = (ks+2kf-2φ(kf-ks))/(ks+2kf+φ(kf-ks)) (Maxwell)</div>
-          <div className="equation">σnf/σf = 1 + 3(σs/σf-1)φ/((σs/σf+2)-(σs/σf-1)φ)</div>
+        
+        <div className="equation-card">
+          <h3><Gauge size={20} /> Engineering Quantities</h3>
+          <div className="equation">
+            Cf = A₁·(dW/dη)|wall — Skin Friction Coefficient<br/>
+            Nu = -A₃·(dθ/dη)|wall — Nusselt Number
+          </div>
+          <p className="equation-description">
+            Skin friction quantifies wall shear stress important for drag calculations.
+            Nusselt number represents the enhancement of convective heat transfer relative to pure conduction.
+          </p>
         </div>
-        <p className="equation-description" style={{ marginTop: '1rem' }}>
-          These correlations model effective nanofluid thermophysical properties based on nanoparticle 
-          volume fraction φ. The ratios A₁, A₂, A₃ in the governing equations are derived from these correlations.
-        </p>
+        
+        <div className="equation-card">
+          <h3><BarChart3 size={20} /> Entropy Generation</h3>
+          <div className="equation">
+            Ns = A₃(θ')²/θ² + A₁·Ec·Pr·(W')²/θ + A₂·Ec·Pr·Ha²·W²/θ<br/>
+            Be = Ns,heat / Ns,total — Bejan Number
+          </div>
+          <p className="equation-description">
+            Total entropy generation from heat transfer irreversibility, fluid friction, and magnetic field effects.
+            Bejan number indicates the dominant source of irreversibility for thermodynamic optimization.
+          </p>
+        </div>
+        
+        <div className="equation-card full-width">
+          <h3><Droplets size={20} /> Nanofluid Property Correlations</h3>
+          <div className="equation-grid">
+            <div className="equation">ρnf = (1-φ)ρf + φρs</div>
+            <div className="equation">μnf = μf/(1-φ)^2.5 (Brinkman)</div>
+            <div className="equation">(ρCp)nf = (1-φ)(ρCp)f + φ(ρCp)s</div>
+            <div className="equation">knf/kf = (ks+2kf-2φ(kf-ks))/(ks+2kf+φ(kf-ks)) (Maxwell)</div>
+            <div className="equation">σnf/σf = 1 + 3(σs/σf-1)φ/((σs/σf+2)-(σs/σf-1)φ)</div>
+          </div>
+          <p className="equation-description" style={{ marginTop: '1rem' }}>
+            These correlations model effective nanofluid thermophysical properties based on nanoparticle 
+            volume fraction φ. The ratios A₁, A₂, A₃ in the governing equations are derived from these correlations.
+          </p>
+        </div>
       </div>
     </div>
   );
