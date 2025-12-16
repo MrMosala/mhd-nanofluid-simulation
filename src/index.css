@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    MHD NANOFLUID COUETTE FLOW - COMPLETE ML EDITION
-   Version: 3.0 - All Features + AI Laboratory
+   Version: 3.5 - All Features + AI Laboratory + Advanced Analytics
    Author: Mr. S.I. Mosala | Nelson Mandela University
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -1640,4 +1640,391 @@ input[type="range"].smooth-slider::-moz-range-thumb:active {
   .video-info p {
     font-size: 0.8rem;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   NEW FEATURES STYLES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Analytics Dashboard */
+.analytics-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-md);
+}
+
+.analytics-card {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  text-align: center;
+}
+
+.analytics-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: var(--space-xs) 0;
+}
+
+.analytics-trend {
+  font-size: 0.8rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: var(--space-xs);
+}
+
+.trend-up { background: rgba(0, 255, 159, 0.2); color: var(--accent-emerald); }
+.trend-down { background: rgba(255, 0, 110, 0.2); color: var(--accent-magenta); }
+.trend-neutral { background: rgba(255, 215, 0, 0.2); color: var(--accent-gold); }
+
+.sparkline-container {
+  height: 40px;
+  margin-top: var(--space-xs);
+}
+
+/* Sensitivity Analysis */
+.sensitivity-panel {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-top: var(--space-lg);
+}
+
+.tornado-chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: var(--space-md) 0;
+}
+
+.tornado-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.tornado-bar {
+  height: 20px;
+  border-radius: var(--radius-sm);
+  transition: width var(--transition-fast);
+  min-width: 20px;
+}
+
+.sensitivity-index {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  min-width: 40px;
+}
+
+/* State Management */
+.state-management {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-top: var(--space-md);
+}
+
+.state-btn {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.state-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.state-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.state-btn.undo:hover { border-color: var(--accent-magenta); color: var(--accent-magenta); }
+.state-btn.redo:hover { border-color: var(--accent-emerald); color: var(--accent-emerald); }
+
+/* Benchmark Cards */
+.benchmark-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--space-md);
+}
+
+.benchmark-card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+
+.benchmark-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-sm);
+}
+
+.benchmark-improvement {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.improvement-positive { background: rgba(0, 255, 159, 0.2); color: var(--accent-emerald); }
+.improvement-negative { background: rgba(255, 0, 110, 0.2); color: var(--accent-magenta); }
+
+.benchmark-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+/* Tutorial Mode */
+.tutorial-mode {
+  background: rgba(0, 212, 255, 0.05);
+  border: 1px solid var(--accent-cyan);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  margin: var(--space-lg) 0;
+}
+
+.tutorial-step {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+  border-left: 3px solid var(--accent-cyan);
+}
+
+.tutorial-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: var(--space-lg);
+}
+
+/* Citation Helper */
+.citation-box {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-top: var(--space-lg);
+}
+
+.citation-text {
+  background: var(--bg-primary);
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin: var(--space-sm) 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Warnings System */
+.warnings-panel {
+  background: rgba(255, 215, 0, 0.1);
+  border: 1px solid var(--accent-gold);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-top: var(--space-md);
+}
+
+.warning-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+
+.warning-item:last-child {
+  margin-bottom: 0;
+}
+
+.warning-icon {
+  color: var(--accent-gold);
+  flex-shrink: 0;
+}
+
+.warning-text {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+/* Language Switcher */
+.language-switcher {
+  position: fixed;
+  top: 20px;
+  right: 100px;
+  z-index: 101;
+}
+
+.language-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-xs) var(--space-sm);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.language-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+/* Toast Notifications */
+.toast-container {
+  position: fixed;
+  bottom: 100px;
+  right: 20px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.toast {
+  background: var(--bg-glass);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  max-width: 300px;
+  animation: slideIn 0.3s ease-out;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.toast.success { border-color: var(--accent-emerald); }
+.toast.warning { border-color: var(--accent-gold); }
+.toast.error { border-color: var(--accent-magenta); }
+.toast.info { border-color: var(--accent-cyan); }
+
+/* Theme Switcher */
+.theme-switcher {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 101;
+}
+
+.theme-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-xs) var(--space-sm);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.theme-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+/* Mobile Enhancements */
+@media (max-width: 768px) {
+  .analytics-grid, .benchmark-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .language-switcher, .theme-switcher {
+    position: static;
+    margin: var(--space-sm) auto;
+    display: inline-block;
+  }
+  
+  .toast-container {
+    bottom: 80px;
+    left: 20px;
+    right: 20px;
+  }
+  
+  .toast {
+    max-width: 100%;
+  }
+  
+  .state-management {
+    justify-content: center;
+  }
+  
+  .tutorial-controls {
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+}
+
+/* Touch-friendly enhancements */
+@media (hover: none) and (pointer: coarse) {
+  .state-btn, .theme-btn, .language-btn {
+    min-height: 44px;
+    padding: var(--space-sm) var(--space-md);
+  }
+  
+  .parameter-slider-mobile {
+    height: 44px;
+  }
+}
+
+/* Physics Highlight Animations */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.highlight-pulse {
+  animation: pulse 2s infinite;
+}
+
+/* Code Highlighting */
+.code-block {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  overflow-x: auto;
+  margin: var(--space-md) 0;
+}
+
+.code-block code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9rem;
+  color: var(--accent-cyan);
+  line-height: 1.5;
 }

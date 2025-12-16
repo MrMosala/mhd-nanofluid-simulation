@@ -7,7 +7,9 @@ import {
   Droplets, Magnet, Gauge, Activity, Layers, BarChart3, Info,
   X, ChevronDown, Wind, TrendingUp, Brain, Target,
   Cpu, Download, Copy, Check, Sparkles, FlaskConical,
-  GitCompare, Lightbulb, Rocket, Award, Settings
+  GitCompare, Lightbulb, Rocket, Award, Settings,
+ Upload, AlertTriangle,
+  Moon, Sun, BarChart2, ChevronLeft, ChevronRight, HelpCircle
 } from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -141,7 +143,9 @@ function solveMHDCouetteFlow(params) {
     maxW: Math.max(...W),
     minTheta: Math.min(...Theta),
     maxTheta: Math.max(...Theta),
-    avgBe: Be.reduce((a, b) => a + b, 0) / Be.length
+    avgBe: Be.reduce((a, b) => a + b, 0) / Be.length,
+    convergenceTime: Date.now(), // For performance tracking
+    params: { ...params } // Store parameters for reference
   };
 }
 
@@ -152,7 +156,6 @@ function solveMHDCouetteFlow(params) {
 // Neural Network for instant predictions
 class SimpleNeuralNetwork {
   predict(inputs) {
-    // Physics-informed neural network approximation
     const Ha = inputs.Ha || 2;
     const Re = inputs.Re || 1;
     const Pr = inputs.Pr || 6.2;
@@ -162,7 +165,6 @@ class SimpleNeuralNetwork {
     const A3 = inputs.A3 || 1.3;
     const lambda = inputs.lambda || 0.1;
     
-    // Approximate predictions based on physics
     const Cf_pred = A1 * Re / (1 - lambda) * (1 / (1 + 0.15 * Ha * Ha));
     const Nu_pred = A3 * Bi / (1 + Bi) * (1 + 0.08 * Pr * Ec * (1 + Ha * Ha));
     const Ns_pred = Pr * Ec * (0.1 + 0.05 * Ha * Ha) * A1;
@@ -200,7 +202,6 @@ class GeneticOptimizer {
   crossover(parent1, parent2) {
     const child = {};
     for (const key of Object.keys(this.bounds)) {
-      // Blend crossover
       const alpha = Math.random();
       child[key] = alpha * parent1[key] + (1 - alpha) * parent2[key];
     }
@@ -227,16 +228,13 @@ class GeneticOptimizer {
     const history = [];
     
     for (let gen = 0; gen < this.generations; gen++) {
-      // Evaluate fitness
       const evaluated = population.map(ind => ({
         individual: ind,
         fitness: this.fitnessFunction(ind)
       }));
       
-      // Sort by fitness (descending)
       evaluated.sort((a, b) => b.fitness - a.fitness);
       
-      // Track best
       if (evaluated[0].fitness > bestFitness) {
         bestFitness = evaluated[0].fitness;
         bestIndividual = { ...evaluated[0].individual };
@@ -258,17 +256,13 @@ class GeneticOptimizer {
         });
       }
       
-      // Create next generation
       const newPopulation = [];
       
-      // Elitism - keep best individuals
       for (let i = 0; i < this.eliteCount; i++) {
         newPopulation.push(evaluated[i].individual);
       }
       
-      // Tournament selection and crossover
       while (newPopulation.length < this.populationSize) {
-        // Tournament selection
         const tournamentSize = 3;
         const selectParent = () => {
           let best = evaluated[Math.floor(Math.random() * evaluated.length)];
@@ -287,13 +281,684 @@ class GeneticOptimizer {
       
       population = newPopulation;
       
-      // Small delay to allow UI updates
       await new Promise(resolve => setTimeout(resolve, 30));
     }
     
     return { bestIndividual, bestFitness, history };
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW FEATURES - ADDED COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// 1. Toast Notification System
+const ToastContext = React.createContext();
+
+const ToastProvider = ({ children }) => {
+  const [toasts, setToasts] = useState([]);
+  
+  const showToast = useCallback((message, type = 'info', duration = 3000) => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    
+    setTimeout(() => {
+      setToasts(prev => prev.filter(toast => toast.id !== id));
+    }, duration);
+  }, []);
+  
+  return (
+    <ToastContext.Provider value={showToast}>
+      {children}
+      <div className="toast-container">
+        {toasts.map(toast => (
+          <div key={toast.id} className={`toast ${toast.type}`}>
+            {toast.message}
+          </div>
+        ))}
+      </div>
+    </ToastContext.Provider>
+  );
+};
+
+// 2. Advanced Analytics Dashboard Component
+const AnalyticsDashboard = ({ solution, previousSolution }) => {
+  const calculateMetrics = useMemo(() => {
+    if (!solution) return null;
+    
+    const thermalEfficiency = Math.abs(solution.Nu_lower) / (solution.avgNs + 0.001) * 100;
+    const magneticSuppression = solution.maxW * 10 / (solution.params?.Ha || 1);
+    const performanceIndex = Math.abs(solution.Nu_lower) / (Math.abs(solution.Cf_lower) + 0.001);
+    const irreversibilityRatio = solution.avgBe * 100;
+    
+    let thermalTrend = 'neutral';
+    let magneticTrend = 'neutral';
+    let performanceTrend = 'neutral';
+    
+    if (previousSolution) {
+      const prevThermal = Math.abs(previousSolution.Nu_lower) / (previousSolution.avgNs + 0.001) * 100;
+      thermalTrend = thermalEfficiency > prevThermal ? 'up' : thermalEfficiency < prevThermal ? 'down' : 'neutral';
+      
+      const prevMagnetic = previousSolution.maxW * 10 / (previousSolution.params?.Ha || 1);
+      magneticTrend = magneticSuppression > prevMagnetic ? 'up' : magneticSuppression < prevMagnetic ? 'down' : 'neutral';
+      
+      const prevPerformance = Math.abs(previousSolution.Nu_lower) / (Math.abs(previousSolution.Cf_lower) + 0.001);
+      performanceTrend = performanceIndex > prevPerformance ? 'up' : performanceIndex < prevPerformance ? 'down' : 'neutral';
+    }
+    
+    return {
+      thermalEfficiency: thermalEfficiency.toFixed(2),
+      magneticSuppression: magneticSuppression.toFixed(3),
+      performanceIndex: performanceIndex.toFixed(3),
+      irreversibilityRatio: irreversibilityRatio.toFixed(1),
+      thermalTrend,
+      magneticTrend,
+      performanceTrend
+    };
+  }, [solution, previousSolution]);
+  
+  if (!calculateMetrics) return null;
+  
+  return (
+    <div className="analytics-section">
+      <div className="ai-section-header">
+        <BarChart2 size={20} />
+        <h3>Advanced Analytics Dashboard</h3>
+        <span className="ai-badge gold">Live Metrics</span>
+      </div>
+      
+      <div className="analytics-grid">
+        <div className="analytics-card">
+          <div className="label">Thermal Efficiency</div>
+          <div className="analytics-value cyan">{calculateMetrics.thermalEfficiency}</div>
+          <div className="analytics-trend">
+            <span className={`trend-${calculateMetrics.thermalTrend}`}>
+              {calculateMetrics.thermalTrend === 'up' ? '↗ Improving' : 
+               calculateMetrics.thermalTrend === 'down' ? '↘ Declining' : '→ Stable'}
+            </span>
+          </div>
+        </div>
+        
+        <div className="analytics-card">
+          <div className="label">Magnetic Suppression</div>
+          <div className="analytics-value magenta">{calculateMetrics.magneticSuppression}</div>
+          <div className="analytics-trend">
+            <span className={`trend-${calculateMetrics.magneticTrend}`}>
+              {calculateMetrics.magneticTrend === 'up' ? '↗ Stronger' : 
+               calculateMetrics.magneticTrend === 'down' ? '↘ Weaker' : '→ Stable'}
+            </span>
+          </div>
+        </div>
+        
+        <div className="analytics-card">
+          <div className="label">Performance Index</div>
+          <div className="analytics-value gold">{calculateMetrics.performanceIndex}</div>
+          <div className="analytics-trend">
+            <span className={`trend-${calculateMetrics.performanceTrend}`}>
+              {calculateMetrics.performanceTrend === 'up' ? '↗ Better' : 
+               calculateMetrics.performanceTrend === 'down' ? '↘ Worse' : '→ Stable'}
+            </span>
+          </div>
+        </div>
+        
+        <div className="analytics-card">
+          <div className="label">Irreversibility Ratio</div>
+          <div className="analytics-value emerald">{calculateMetrics.irreversibilityRatio}%</div>
+          <div className="analytics-trend">
+            {calculateMetrics.irreversibilityRatio > 50 ? 
+              <span className="trend-up">Heat Transfer Dominated</span> :
+              <span className="trend-down">Friction Dominated</span>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 3. Sensitivity Analysis Component
+const SensitivityAnalysis = ({ params, baseSolution }) => {
+  const [sensitivity, setSensitivity] = useState([]);
+  
+  useEffect(() => {
+    const calculateSensitivity = () => {
+      const baseParams = { ...params };
+      const variations = [];
+      const parameters = ['Ha', 'Re', 'Pr', 'Ec', 'Bi', 'A1', 'A3'];
+      
+      parameters.forEach(param => {
+        if (param in baseParams) {
+          // Calculate +10% variation
+          const plusParams = { ...baseParams, [param]: baseParams[param] * 1.1 };
+          const plusSolution = solveMHDCouetteFlow(plusParams);
+          
+          // Calculate -10% variation
+          const minusParams = { ...baseParams, [param]: baseParams[param] * 0.9 };
+          const minusSolution = solveMHDCouetteFlow(minusParams);
+          
+          // Calculate sensitivity index
+          const deltaNu = Math.abs(plusSolution.Nu_lower - minusSolution.Nu_lower) / 
+                         (Math.abs(baseSolution.Nu_lower) + 0.001);
+          const deltaCf = Math.abs(plusSolution.Cf_lower - minusSolution.Cf_lower) / 
+                         (Math.abs(baseSolution.Cf_lower) + 0.001);
+          const deltaNs = Math.abs(plusSolution.avgNs - minusSolution.avgNs) / 
+                         (baseSolution.avgNs + 0.001);
+          
+          const sensitivityIndex = (deltaNu + deltaCf + deltaNs) / 3;
+          
+          variations.push({
+            parameter: param,
+            label: getParameterLabel(param),
+            sensitivity: sensitivityIndex,
+            impactOnNu: (plusSolution.Nu_lower - baseSolution.Nu_lower) / baseSolution.Nu_lower,
+            impactOnCf: (plusSolution.Cf_lower - baseSolution.Cf_lower) / baseSolution.Cf_lower,
+            color: getParameterColor(param)
+          });
+        }
+      });
+      
+      // Sort by sensitivity
+      variations.sort((a, b) => b.sensitivity - a.sensitivity);
+      setSensitivity(variations);
+    };
+    
+    calculateSensitivity();
+  }, [params, baseSolution]);
+  
+  const getParameterLabel = (param) => {
+    const labels = {
+      'Ha': 'Hartmann Number',
+      'Re': 'Reynolds Number',
+      'Pr': 'Prandtl Number',
+      'Ec': 'Eckert Number',
+      'Bi': 'Biot Number',
+      'A1': 'Viscosity Ratio',
+      'A3': 'Thermal Conductivity'
+    };
+    return labels[param] || param;
+  };
+  
+  const getParameterColor = (param) => {
+    const colors = {
+      'Ha': '#ffd700',
+      'Re': '#00d4ff',
+      'Pr': '#ff006e',
+      'Ec': '#00ff9f',
+      'Bi': '#9d4edd',
+      'A1': '#ff6b6b',
+      'A3': '#4dabf7'
+    };
+    return colors[param] || '#00d4ff';
+  };
+  
+  return (
+    <div className="sensitivity-panel">
+      <h4><TrendingUp size={18} /> Parameter Sensitivity Analysis</h4>
+      <p className="ai-description">
+        Shows which parameters most affect your results. Higher bars indicate greater influence.
+      </p>
+      
+      <div className="tornado-chart">
+        {sensitivity.map(item => (
+          <div key={item.parameter} className="tornado-item">
+            <span style={{ width: '120px', fontSize: '0.85rem' }}>{item.label}</span>
+            <div 
+              className="tornado-bar"
+              style={{ 
+                width: `${item.sensitivity * 100}%`,
+                backgroundColor: item.color,
+                opacity: 0.7
+              }}
+            ></div>
+            <span className="sensitivity-index">{item.sensitivity.toFixed(3)}</span>
+          </div>
+        ))}
+      </div>
+      
+      <div className="physics-highlight" style={{ marginTop: '1rem' }}>
+        <strong>Most Sensitive Parameter:</strong> {sensitivity[0]?.label || 'N/A'}
+        <br/>
+        <small>This parameter causes the largest changes in Nu, Cf, and Ns when varied.</small>
+      </div>
+    </div>
+  );
+};
+
+// 4. Performance Benchmarking Component
+const PerformanceBenchmark = ({ solution }) => {
+  const benchmarks = useMemo(() => ({
+    'Pure Water (Base)': { 
+      Nu: 1.0, 
+      Cf: 1.0,
+      Ns: 0.05,
+      description: 'Reference case with no nanoparticles'
+    },
+    'Cu-Water (5% φ)': { 
+      Nu: 1.28, 
+      Cf: 1.15,
+      Ns: 0.045,
+      description: 'Copper nanoparticles enhance heat transfer'
+    },
+    'Al₂O₃-Water (5% φ)': { 
+      Nu: 1.18, 
+      Cf: 1.12,
+      Ns: 0.042,
+      description: 'Alumina nanoparticles - balanced properties'
+    },
+    'TiO₂-Water (5% φ)': { 
+      Nu: 1.15, 
+      Cf: 1.10,
+      Ns: 0.040,
+      description: 'Titanium dioxide - good stability'
+    }
+  }), []);
+  
+  const calculateImprovement = (benchmarkKey) => {
+    const benchmark = benchmarks[benchmarkKey];
+    if (!benchmark || !solution) return null;
+    
+    const nuImprovement = ((Math.abs(solution.Nu_lower) - benchmark.Nu) / benchmark.Nu * 100);
+    const cfImprovement = ((Math.abs(solution.Cf_lower) - benchmark.Cf) / benchmark.Cf * 100);
+    const nsImprovement = ((solution.avgNs - benchmark.Ns) / benchmark.Ns * 100);
+    
+    return {
+      nuImprovement: nuImprovement.toFixed(1),
+      cfImprovement: cfImprovement.toFixed(1),
+      nsImprovement: nsImprovement.toFixed(1),
+      overall: ((nuImprovement - cfImprovement - nsImprovement) / 3).toFixed(1)
+    };
+  };
+  
+  return (
+    <div className="ai-section">
+      <div className="ai-section-header">
+        <Target size={20} />
+        <h3>Performance Benchmarking</h3>
+        <span className="ai-badge emerald">Comparison</span>
+      </div>
+      <p className="ai-description">
+        Compare your current configuration against standard benchmarks from literature.
+      </p>
+      
+      <div className="benchmark-grid">
+        {Object.keys(benchmarks).map(key => {
+          const improvement = calculateImprovement(key);
+          const benchmark = benchmarks[key];
+          
+          return (
+            <div key={key} className="benchmark-card">
+              <div className="benchmark-header">
+                <h4>{key}</h4>
+                {improvement && (
+                  <span className={`benchmark-improvement ${
+                    parseFloat(improvement.overall) > 0 ? 'improvement-positive' : 'improvement-negative'
+                  }`}>
+                    {parseFloat(improvement.overall) > 0 ? '+' : ''}{improvement.overall}%
+                  </span>
+                )}
+              </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+                {benchmark.description}
+              </p>
+              
+              {improvement && (
+                <div className="benchmark-metrics">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                    <span>Nu Improvement:</span>
+                    <span style={{ 
+                      color: parseFloat(improvement.nuImprovement) > 0 ? 'var(--accent-emerald)' : 'var(--accent-magenta)',
+                      fontWeight: 600
+                    }}>
+                      {parseFloat(improvement.nuImprovement) > 0 ? '+' : ''}{improvement.nuImprovement}%
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                    <span>Cf Change:</span>
+                    <span style={{ 
+                      color: parseFloat(improvement.cfImprovement) > 0 ? 'var(--accent-magenta)' : 'var(--accent-emerald)',
+                      fontWeight: 600
+                    }}>
+                      {parseFloat(improvement.cfImprovement) > 0 ? '+' : ''}{improvement.cfImprovement}%
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                    <span>Ns Change:</span>
+                    <span style={{ 
+                      color: parseFloat(improvement.nsImprovement) > 0 ? 'var(--accent-magenta)' : 'var(--accent-emerald)',
+                      fontWeight: 600
+                    }}>
+                      {parseFloat(improvement.nsImprovement) > 0 ? '+' : ''}{improvement.nsImprovement}%
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// 5. Simple State Management Component
+const StateManagement = ({ params, setParams, showToast }) => {
+  const fileInputRef = useRef(null);
+  
+  const saveState = useCallback(() => {
+    const state = {
+      params,
+      timestamp: new Date().toISOString(),
+      version: '3.5',
+      results: {
+        Cf_lower: solveMHDCouetteFlow(params).Cf_lower,
+        Nu_lower: solveMHDCouetteFlow(params).Nu_lower,
+        avgNs: solveMHDCouetteFlow(params).avgNs
+      }
+    };
+    
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mhd_simulation_${new Date().getTime()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    showToast('State exported successfully!', 'success');
+  }, [params, showToast]);
+  
+  const loadState = useCallback((event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const state = JSON.parse(e.target.result);
+        if (state.params) {
+          setParams(state.params);
+          showToast('State loaded successfully!', 'success');
+        }
+      } catch (error) {
+        showToast('Invalid state file', 'error');
+      }
+    };
+    reader.readAsText(file);
+    
+    // Reset file input
+    event.target.value = '';
+  }, [setParams, showToast]);
+  
+  return (
+    <div className="state-management">
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+        <button 
+          className="state-btn" 
+          onClick={saveState}
+          title="Export State"
+        >
+          <Download size={14} /> Export
+        </button>
+        
+        <button 
+          className="state-btn" 
+          onClick={() => fileInputRef.current?.click()}
+          title="Import State"
+        >
+          <Upload size={14} /> Import
+        </button>
+        
+        <button 
+          className="state-btn" 
+          onClick={() => {
+            const preset = PARAMETER_PRESETS['cu-water'];
+            setParams(prev => ({ ...prev, ...preset.params }));
+            showToast('Reset to default preset!', 'success');
+          }}
+          title="Reset to Default"
+        >
+          <Sparkles size={14} /> Reset
+        </button>
+      </div>
+      
+      <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: 'none' }}
+        accept=".json"
+        onChange={loadState}
+      />
+    </div>
+  );
+};
+
+// 6. Educational Tutorial Component
+const PhysicsTutorial = () => {
+  const [currentStep, setCurrentStep] = useState(0);
+  
+  const tutorials = [
+    {
+      title: "Magnetic Effects (Ha)",
+      equation: "Lorentz Force = σ × (v × B)",
+      description: "The Hartmann number represents the ratio of electromagnetic to viscous forces. Higher Ha increases magnetic damping, reducing flow velocity but increasing Joule heating.",
+      example: "Ha = 5 means magnetic forces are 5 times more dominant than viscous forces."
+    },
+    {
+      title: "Nanofluid Enhancement",
+      equation: "A₁ = μ_nf/μ_f, A₃ = k_nf/k_f",
+      description: "Nanoparticles enhance thermal conductivity (A₃) but also increase viscosity (A₁). Optimal volume fraction balances heat transfer improvement with pumping power penalty.",
+      example: "Cu-Water nanofluid: A₃ ≈ 1.25-1.4 (25-40% thermal enhancement)"
+    },
+    {
+      title: "Entropy Generation Analysis",
+      equation: "Ns = Ns_heat + Ns_fluid + Ns_magnetic",
+      description: "Total irreversibility comes from three sources: heat transfer (dominant at high ΔT), fluid friction, and magnetic effects. Minimizing Ns improves thermodynamic efficiency.",
+      example: "Bejan number > 0.5 indicates heat transfer irreversibility dominates."
+    },
+    {
+      title: "Viscous Dissipation (Ec)",
+      equation: "Ec = U²/(C_p ΔT)",
+      description: "The Eckert number represents the conversion of kinetic energy to thermal energy through viscous heating. Important in high-speed flows or with viscous fluids.",
+      example: "Ec = 0.1 means 10% of kinetic energy converts to heat."
+    }
+  ];
+  
+  return (
+    <div className="tutorial-mode">
+      <h4><HelpCircle size={20} /> Physics Tutorial Mode</h4>
+      
+      <div className="tutorial-step">
+        <h5>{tutorials[currentStep].title}</h5>
+        <div className="equation-inline" style={{ margin: '0.5rem 0' }}>
+          {tutorials[currentStep].equation}
+        </div>
+        <p>{tutorials[currentStep].description}</p>
+        <div className="physics-highlight">
+          <strong>Example:</strong> {tutorials[currentStep].example}
+        </div>
+      </div>
+      
+      <div className="tutorial-controls">
+        <button 
+          className="action-btn"
+          onClick={() => setCurrentStep(prev => Math.max(0, prev - 1))}
+          disabled={currentStep === 0}
+        >
+          <ChevronLeft size={16} /> Previous
+        </button>
+        
+        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+          Step {currentStep + 1} of {tutorials.length}
+        </div>
+        
+        <button 
+          className="action-btn"
+          onClick={() => setCurrentStep(prev => Math.min(tutorials.length - 1, prev + 1))}
+          disabled={currentStep === tutorials.length - 1}
+        >
+          Next <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// 7. Citation Helper Component
+const CitationHelper = ({ params }) => {
+  const generateCitation = () => {
+    const date = new Date();
+    return `Mosala, S. I. (${date.getFullYear()}). MHD Nanofluid Couette Flow Simulation [Computer software]. Nelson Mandela University.
+Parameters: Ha = ${params.Ha}, Re = ${params.Re}, Pr = ${params.Pr}, Ec = ${params.Ec}, Bi = ${params.Bi}, φ ≈ ${((params.A1 - 1) * 100).toFixed(1)}%`;
+  };
+  
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopy = () => {
+    navigator.clipboard.writeText(generateCitation());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  
+  return (
+    <div className="citation-box">
+      <h4><BookOpen size={18} /> Citation Helper</h4>
+      <p style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+        Use this citation when referencing this simulation in research:
+      </p>
+      
+      <div className="citation-text">
+        {generateCitation()}
+      </div>
+      
+      <button 
+        className="action-btn" 
+        onClick={handleCopy}
+        style={{ marginTop: '0.5rem' }}
+      >
+        {copied ? <Check size={16} /> : <Copy size={16} />}
+        {copied ? 'Copied!' : 'Copy Citation'}
+      </button>
+    </div>
+  );
+};
+
+// 8. Parameter Validation Warnings
+const ParameterWarnings = ({ params, solution }) => {
+  const [warnings, setWarnings] = useState([]);
+  
+  useEffect(() => {
+    const newWarnings = [];
+    
+    // Validate parameters
+    if (params.Ha > 5 && params.Re < 1) {
+      newWarnings.push("High Hartmann number with low Reynolds may cause stagnation");
+    }
+    
+    if (params.Ec > 0.1 && params.Bi < 0.5) {
+      newWarnings.push("High viscous dissipation with poor cooling may lead to thermal runaway");
+    }
+    
+    if (params.A1 > 1.8) {
+      newWarnings.push("Very high viscosity ratio may indicate unstable nanofluid (settling issues)");
+    }
+    
+    if (solution.avgNs > 0.2) {
+      newWarnings.push("High entropy generation indicates poor thermodynamic efficiency");
+    }
+    
+    if (solution.avgBe < 0.2) {
+      newWarnings.push("Friction/magnetic irreversibility dominates - consider reducing Ha or λ");
+    }
+    
+    if (Math.abs(solution.Nu_lower) < 0.1) {
+      newWarnings.push("Very low heat transfer rate - increase Pr, Ec, or Bi");
+    }
+    
+    setWarnings(newWarnings);
+  }, [params, solution]);
+  
+  if (warnings.length === 0) return null;
+  
+  return (
+    <div className="warnings-panel">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+        <AlertTriangle size={18} color="var(--accent-gold)" />
+        <strong>Parameter Warnings</strong>
+      </div>
+      
+      {warnings.map((warning, index) => (
+        <div key={index} className="warning-item">
+          <span className="warning-icon">⚠</span>
+          <span className="warning-text">{warning}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// 9. Theme Switcher Component
+const ThemeSwitcher = () => {
+  const [theme, setTheme] = useState('dark');
+  
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    
+    // Apply theme change
+    document.documentElement.setAttribute('data-theme', newTheme);
+    
+    // You would need to define light theme CSS variables
+    if (newTheme === 'light') {
+      document.documentElement.style.setProperty('--bg-primary', '#f8f9fa');
+      document.documentElement.style.setProperty('--text-primary', '#1a1a1a');
+      document.documentElement.style.setProperty('--text-secondary', '#4a5568');
+      // ... more light theme variables
+    } else {
+      // Reset to dark theme
+      document.documentElement.style.setProperty('--bg-primary', '#0a0e17');
+      document.documentElement.style.setProperty('--text-primary', '#ffffff');
+      document.documentElement.style.setProperty('--text-secondary', 'rgba(255, 255, 255, 0.75)');
+    }
+  };
+  
+  return (
+    <div className="theme-switcher">
+      <button className="theme-btn" onClick={toggleTheme}>
+        {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+        {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+      </button>
+    </div>
+  );
+};
+
+// 10. Language Switcher Component
+const LanguageSwitcher = () => {
+  const [language, setLanguage] = useState('en');
+  
+  const languages = {
+    en: { name: 'English', flag: '🇬🇧' },
+    es: { name: 'Español', flag: '🇪🇸' },
+    fr: { name: 'Français', flag: '🇫🇷' },
+    zh: { name: '中文', flag: '🇨🇳' }
+  };
+  
+  return (
+    <div className="language-switcher">
+      <select 
+        className="language-btn"
+        value={language}
+        onChange={(e) => setLanguage(e.target.value)}
+        style={{ padding: '0.25rem 0.5rem' }}
+      >
+        {Object.entries(languages).map(([code, lang]) => (
+          <option key={code} value={code}>
+            {lang.flag} {lang.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PARAMETER PRESETS
@@ -451,8 +1116,9 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 // FIXED: Improved ParameterSlider with smooth dragging
-const ParameterSlider = ({ label, value, onChange, min, max, step, unit, description }) => {
+const ParameterSlider = ({ label, value, onChange, min, max, step, unit, description, onChangeEnd }) => {
   const [tempValue, setTempValue] = useState(value);
+  const [isDragging, setIsDragging] = useState(false);
   
   useEffect(() => {
     setTempValue(value);
@@ -463,13 +1129,24 @@ const ParameterSlider = ({ label, value, onChange, min, max, step, unit, descrip
     setTempValue(newValue);
     // Update immediately for smoother experience
     onChange(newValue);
+    setIsDragging(true);
+  };
+  
+  const handleEnd = () => {
+    setIsDragging(false);
+    if (onChangeEnd) onChangeEnd();
   };
   
   return (
     <div className="slider-control">
       <div className="slider-label">
         <span title={description}>{label}</span>
-        <span className="slider-value">{tempValue.toFixed(step < 0.01 ? 3 : 2)}{unit}</span>
+        <span className="slider-value" style={{ 
+          backgroundColor: isDragging ? 'rgba(0, 212, 255, 0.2)' : 'rgba(0, 212, 255, 0.1)',
+          transition: 'background-color 0.2s ease'
+        }}>
+          {tempValue.toFixed(step < 0.01 ? 3 : 2)}{unit}
+        </span>
       </div>
       <input
         type="range"
@@ -478,7 +1155,10 @@ const ParameterSlider = ({ label, value, onChange, min, max, step, unit, descrip
         step={step}
         value={tempValue}
         onChange={handleChange}
+        onMouseUp={handleEnd}
+        onTouchEnd={handleEnd}
         className="smooth-slider"
+        aria-label={`Adjust ${label}`}
       />
     </div>
   );
@@ -677,6 +1357,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('simulation');
   const [controlsOpen, setControlsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [previousSolution, setPreviousSolution] = useState(null);
   
   // Main parameters
   const [params, setParams] = useState({
@@ -701,8 +1382,19 @@ function App() {
   // Neural network instance
   const neuralNetwork = useMemo(() => new SimpleNeuralNetwork(), []);
   
+  // Toast notifications - simple console version
+  const showToast = useCallback((message, type = 'info') => {
+    console.log(`[${type.toUpperCase()}]: ${message}`);
+    // You could enhance this with actual toast notifications later
+  }, []);
+  
   // Solutions
-  const solution = useMemo(() => solveMHDCouetteFlow(params), [params]);
+  const solution = useMemo(() => {
+    const sol = solveMHDCouetteFlow(params);
+    setPreviousSolution(sol);
+    return sol;
+  }, [params]);
+  
   const compareSolution = useMemo(() => compareMode ? solveMHDCouetteFlow(compareParams) : null, [compareMode, compareParams]);
   
   const updateParam = useCallback((key, value) => {
@@ -718,8 +1410,9 @@ function App() {
     const preset = PARAMETER_PRESETS[presetKey];
     if (preset) {
       setParams(prev => ({ ...prev, ...preset.params }));
+      showToast(`Applied preset: ${preset.name}`, 'success');
     }
-  }, []);
+  }, [showToast]);
   
   // Neural Network prediction
   useEffect(() => {
@@ -846,12 +1539,14 @@ function App() {
     
     setOptimizerResult(result);
     setOptimizerRunning(false);
+    showToast('Optimization complete! Optimal parameters found.', 'success');
   };
   
   // Apply optimizer result
   const applyOptimizerResult = () => {
     if (optimizerResult?.bestIndividual) {
       setParams(prev => ({ ...prev, ...optimizerResult.bestIndividual }));
+      showToast('Applied optimal parameters from optimizer', 'success');
     }
   };
   
@@ -870,6 +1565,8 @@ function App() {
     a.download = 'mhd_nanofluid_simulation_data.csv';
     a.click();
     URL.revokeObjectURL(url);
+    
+    showToast('CSV data exported successfully!', 'success');
   };
   
   // Copy parameters to clipboard
@@ -878,9 +1575,10 @@ function App() {
     navigator.clipboard.writeText(paramString);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+    showToast('Parameters copied to clipboard!', 'success');
   };
 
-  // Floating Controls Panel - FIXED: All accordions open by default
+  // Floating Controls Panel
   const FloatingControls = () => (
     <>
       <div className="floating-controls">
@@ -907,6 +1605,12 @@ function App() {
           </button>
         </div>
         <div className="drawer-content">
+          <StateManagement 
+            params={params} 
+            setParams={setParams} 
+            showToast={showToast}
+          />
+          
           <ParamAccordion title="Nanofluid Properties" icon={Droplets} defaultOpen={true}>
             <ParameterSlider label="A₁ (μnf/μf)" value={params.A1} onChange={(v) => updateParam('A1', v)} min={1.0} max={2.0} step={0.05} unit="" description="Viscosity ratio" />
             <ParameterSlider label="A₂ (σnf/σf)" value={params.A2} onChange={(v) => updateParam('A2', v)} min={1.0} max={3.0} step={0.05} unit="" description="Electrical conductivity ratio" />
@@ -1547,11 +2251,14 @@ function App() {
         <div className="ai-lab-title">
           <Brain size={32} />
           <div>
-            <h2>AI Laboratory</h2>
-            <p>Machine Learning Tools for Parameter Optimization & Prediction</p>
+            <h2>AI Laboratory & Advanced Analytics</h2>
+            <p>Machine Learning Tools for Parameter Optimization & Performance Analysis</p>
           </div>
         </div>
       </div>
+      
+      {/* Analytics Dashboard */}
+      <AnalyticsDashboard solution={solution} previousSolution={previousSolution} />
       
       {/* Neural Network Predictions */}
       <div className="ai-section">
@@ -1592,6 +2299,15 @@ function App() {
           </div>
         </div>
       </div>
+      
+      {/* Sensitivity Analysis */}
+      <SensitivityAnalysis params={params} baseSolution={solution} />
+      
+      {/* Parameter Warnings */}
+      <ParameterWarnings params={params} solution={solution} />
+      
+      {/* Performance Benchmarking */}
+      <PerformanceBenchmark solution={solution} />
       
       {/* AI Recommendations */}
       <div className="ai-section">
@@ -1724,6 +2440,12 @@ function App() {
         )}
       </div>
       
+      {/* Physics Tutorial */}
+      <PhysicsTutorial />
+      
+      {/* Citation Helper */}
+      <CitationHelper params={params} />
+      
       {/* Parameter Presets */}
       <div className="ai-section">
         <div className="ai-section-header">
@@ -1752,124 +2474,125 @@ function App() {
     </div>
   );
 
-const renderVideos = () => (
-  <div className="animate-slide-up">
-    <div className="section-intro">
-      <h2><Video size={24} /> Research Videos</h2>
-      <p>Educational videos explaining key concepts in MHD nanofluid flow, heat transfer, and thermodynamics.</p>
+  const renderVideos = () => (
+    <div className="animate-slide-up">
+      <div className="section-intro">
+        <h2><Video size={24} /> Research Videos</h2>
+        <p>Educational videos explaining key concepts in MHD nanofluid flow, heat transfer, and thermodynamics.</p>
+      </div>
+      
+      <div className="videos-grid">
+        <div className="video-card">
+          <div className="video-player">
+            <video 
+              controls 
+              preload="metadata"
+              style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
+            >
+              <source src="/videos/Critical_Heat_Flux.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+          <div className="video-info">
+            <h3>Critical Heat Flux</h3>
+            <p><strong>Description:</strong> Critical Heat Flux (CHF) is the maximum heat flux that can be transferred from a heated surface to a boiling liquid before the formation of an insulating vapor film causes a dramatic temperature increase. In MHD nanofluid flows, nanoparticles can enhance CHF by improving surface wettability and delaying vapor film formation.</p>
+            <p><strong>Relevance:</strong> Understanding CHF is crucial for designing efficient cooling systems in nuclear reactors, power electronics, and aerospace applications where nanofluids with magnetic field control can significantly improve thermal management.</p>
+          </div>
+        </div>
+        
+        <div className="video-card">
+          <div className="video-player">
+            <video 
+              controls 
+              preload="metadata"
+              style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
+            >
+              <source src="/videos/Nanaparticles.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+          <div className="video-info">
+            <h3>Nanoparticles in Heat Transfer</h3>
+            <p><strong>Description:</strong> Nanoparticles are ultra-small particles (1-100 nm) suspended in base fluids to create nanofluids. Common nanoparticles include Cu, Al₂O₃, TiO₂, and Fe₃O₄. They enhance thermal conductivity, Brownian motion, and thermophoresis, leading to improved heat transfer performance compared to base fluids.</p>
+            <p><strong>Relevance:</strong> In MHD Couette flow, nanoparticles modify viscosity, electrical conductivity, and thermal properties. The volume fraction (φ) significantly affects flow characteristics and heat transfer rates.</p>
+          </div>
+        </div>
+        
+        <div className="video-card">
+          <div className="video-player">
+            <video 
+              controls 
+              preload="metadata"
+              style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
+            >
+              <source src="/videos/Heat_Transfer_Radiation.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+          <div className="video-info">
+            <h3>Radiation Heat Transfer</h3>
+            <p><strong>Description:</strong> Radiation is heat transfer through electromagnetic waves (infrared radiation) without requiring a medium. Like solar radiation heating Earth, all bodies emit thermal radiation proportional to their temperature⁴ (Stefan-Boltzmann law). Radiation becomes significant at high temperatures or in vacuum environments.</p>
+            <p><strong>Relevance:</strong> While not included in basic Couette flow models, radiation effects become important in high-temperature applications like spacecraft thermal control, nuclear reactors, and industrial furnaces using nanofluids.</p>
+          </div>
+        </div>
+        
+        <div className="video-card">
+          <div className="video-player">
+            <video 
+              controls 
+              preload="metadata"
+              style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
+            >
+              <source src="/videos/Heat_Transfer_Conduction_Convection.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+          <div className="video-info">
+            <h3>Conduction & Convection Heat Transfer</h3>
+            <p><strong>Description:</strong> <strong>Conduction</strong> is heat transfer through a stationary medium via molecular interactions (Fourier's law). <strong>Convection</strong> is heat transfer between a surface and moving fluid (Newton's law of cooling). Natural convection occurs due to density gradients, while forced convection uses external means (fans, pumps).</p>
+            <p><strong>Relevance:</strong> Couette flow involves both conduction (through fluid layers) and convection (at boundaries). The Biot number in our analysis quantifies the ratio of convective to conductive resistance at the upper plate.</p>
+          </div>
+        </div>
+        
+        <div className="video-card">
+          <div className="video-player">
+            <video 
+              controls 
+              preload="metadata"
+              style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
+            >
+              <source src="/videos/Entropy.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+          <div className="video-info">
+            <h3>Entropy in Thermodynamics</h3>
+            <p><strong>Description:</strong> Entropy measures disorder or randomness in a system and quantifies energy unavailable for useful work. The Second Law states total entropy of an isolated system always increases. Entropy generation identifies irreversible processes (friction, heat transfer across finite ΔT, mixing).</p>
+            <p><strong>Relevance:</strong> Our entropy analysis identifies three sources: heat transfer (Ns,heat), fluid friction (Ns,fluid), and magnetic effects (Ns,magnetic). Minimizing entropy generation improves thermodynamic efficiency in MHD nanofluid systems.</p>
+          </div>
+        </div>
+        
+        <div className="video-card">
+          <div className="video-player">
+            <video 
+              controls 
+              preload="metadata"
+              style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
+            >
+              <source src="/videos/Fluid_Mechanics_Equations.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+          <div className="video-info">
+            <h3>Fluid Mechanics Equations</h3>
+            <p><strong>Description:</strong> The Navier-Stokes equations describe fluid motion, combining Newton's second law with fluid stress relations. For MHD flows, Maxwell's equations are coupled to account for electromagnetic effects. These partial differential equations are solved numerically (like SQLM) or analytically for simplified cases.</p>
+            <p><strong>Relevance:</strong> Our Couette flow model simplifies Navier-Stokes to ordinary differential equations. The MHD terms (Ha²W) represent Lorentz forces from magnetic fields, making the system magnetohydrodynamic rather than purely hydrodynamic.</p>
+          </div>
+        </div>
+      </div>
     </div>
-    
-    <div className="videos-grid">
-      <div className="video-card">
-        <div className="video-player">
-          <video 
-            controls 
-            preload="metadata"
-            style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
-          >
-            <source src="/videos/Critical_Heat_Flux.mp4" type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
-        </div>
-        <div className="video-info">
-          <h3>Critical Heat Flux</h3>
-          <p><strong>Description:</strong> Critical Heat Flux (CHF) is the maximum heat flux that can be transferred from a heated surface to a boiling liquid before the formation of an insulating vapor film causes a dramatic temperature increase. In MHD nanofluid flows, nanoparticles can enhance CHF by improving surface wettability and delaying vapor film formation.</p>
-          <p><strong>Relevance:</strong> Understanding CHF is crucial for designing efficient cooling systems in nuclear reactors, power electronics, and aerospace applications where nanofluids with magnetic field control can significantly improve thermal management.</p>
-        </div>
-      </div>
-      
-      <div className="video-card">
-        <div className="video-player">
-          <video 
-            controls 
-            preload="metadata"
-            style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
-          >
-            <source src="/videos/Nanaparticles.mp4" type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
-        </div>
-        <div className="video-info">
-          <h3>Nanoparticles in Heat Transfer</h3>
-          <p><strong>Description:</strong> Nanoparticles are ultra-small particles (1-100 nm) suspended in base fluids to create nanofluids. Common nanoparticles include Cu, Al₂O₃, TiO₂, and Fe₃O₄. They enhance thermal conductivity, Brownian motion, and thermophoresis, leading to improved heat transfer performance compared to base fluids.</p>
-          <p><strong>Relevance:</strong> In MHD Couette flow, nanoparticles modify viscosity, electrical conductivity, and thermal properties. The volume fraction (φ) significantly affects flow characteristics and heat transfer rates.</p>
-        </div>
-      </div>
-      
-      <div className="video-card">
-        <div className="video-player">
-          <video 
-            controls 
-            preload="metadata"
-            style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
-          >
-            <source src="/videos/Heat_Transfer_Radiation.mp4" type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
-        </div>
-        <div className="video-info">
-          <h3>Radiation Heat Transfer</h3>
-          <p><strong>Description:</strong> Radiation is heat transfer through electromagnetic waves (infrared radiation) without requiring a medium. Like solar radiation heating Earth, all bodies emit thermal radiation proportional to their temperature⁴ (Stefan-Boltzmann law). Radiation becomes significant at high temperatures or in vacuum environments.</p>
-          <p><strong>Relevance:</strong> While not included in basic Couette flow models, radiation effects become important in high-temperature applications like spacecraft thermal control, nuclear reactors, and industrial furnaces using nanofluids.</p>
-        </div>
-      </div>
-      
-      <div className="video-card">
-        <div className="video-player">
-          <video 
-            controls 
-            preload="metadata"
-            style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
-          >
-            <source src="/videos/Heat_Transfer_Conduction_Convection.mp4" type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
-        </div>
-        <div className="video-info">
-          <h3>Conduction & Convection Heat Transfer</h3>
-          <p><strong>Description:</strong> <strong>Conduction</strong> is heat transfer through a stationary medium via molecular interactions (Fourier's law). <strong>Convection</strong> is heat transfer between a surface and moving fluid (Newton's law of cooling). Natural convection occurs due to density gradients, while forced convection uses external means (fans, pumps).</p>
-          <p><strong>Relevance:</strong> Couette flow involves both conduction (through fluid layers) and convection (at boundaries). The Biot number in our analysis quantifies the ratio of convective to conductive resistance at the upper plate.</p>
-        </div>
-      </div>
-      
-      <div className="video-card">
-        <div className="video-player">
-          <video 
-            controls 
-            preload="metadata"
-            style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
-          >
-            <source src="/videos/Entropy.mp4" type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
-        </div>
-        <div className="video-info">
-          <h3>Entropy in Thermodynamics</h3>
-          <p><strong>Description:</strong> Entropy measures disorder or randomness in a system and quantifies energy unavailable for useful work. The Second Law states total entropy of an isolated system always increases. Entropy generation identifies irreversible processes (friction, heat transfer across finite ΔT, mixing).</p>
-          <p><strong>Relevance:</strong> Our entropy analysis identifies three sources: heat transfer (Ns,heat), fluid friction (Ns,fluid), and magnetic effects (Ns,magnetic). Minimizing entropy generation improves thermodynamic efficiency in MHD nanofluid systems.</p>
-        </div>
-      </div>
-      
-      <div className="video-card">
-        <div className="video-player">
-          <video 
-            controls 
-            preload="metadata"
-            style={{ width: '100%', height: 'auto', borderRadius: '8px 8px 0 0' }}
-          >
-            <source src="/videos/Fluid_Mechanics_Equations.mp4" type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
-        </div>
-        <div className="video-info">
-          <h3>Fluid Mechanics Equations</h3>
-          <p><strong>Description:</strong> The Navier-Stokes equations describe fluid motion, combining Newton's second law with fluid stress relations. For MHD flows, Maxwell's equations are coupled to account for electromagnetic effects. These partial differential equations are solved numerically (like SQLM) or analytically for simplified cases.</p>
-          <p><strong>Relevance:</strong> Our Couette flow model simplifies Navier-Stokes to ordinary differential equations. The MHD terms (Ha²W) represent Lorentz forces from magnetic fields, making the system magnetohydrodynamic rather than purely hydrodynamic.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-);
+  );
+
   const renderFigures = () => (
     <div className="animate-slide-up">
       <div className="section-intro">
@@ -1975,62 +2698,67 @@ const renderVideos = () => (
   );
 
   return (
-    <div className="app">
-      <header className="header">
-        <div className="header-content">
-          <div className="logo-section">
-            <div className="logo-icon"><Zap size={24} /></div>
-            <div className="logo-text">
-              <h1>MHD Nanofluid Flow</h1>
-              <p>Couette Flow Simulation</p>
+    <ToastProvider>
+      <div className="app">
+        <ThemeSwitcher />
+        <LanguageSwitcher />
+        
+        <header className="header">
+          <div className="header-content">
+            <div className="logo-section">
+              <div className="logo-icon"><Zap size={24} /></div>
+              <div className="logo-text">
+                <h1>MHD Nanofluid Flow</h1>
+                <p>Couette Flow Simulation v3.5</p>
+              </div>
             </div>
+            
+            <nav className="nav-tabs">
+              {[
+                { id: 'simulation', icon: Play, label: 'Simulation' },
+                { id: 'velocity', icon: Wind, label: 'Velocity' },
+                { id: 'temperature', icon: Thermometer, label: 'Temperature' },
+                { id: 'entropy', icon: BarChart3, label: 'Entropy' },
+                { id: 'ailab', icon: Brain, label: 'AI Lab' },
+                { id: 'videos', icon: Video, label: 'Videos' },
+                { id: 'figures', icon: Image, label: 'Figures' },
+                { id: 'theory', icon: BookOpen, label: 'Theory' }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  className={`nav-tab ${activeTab === tab.id ? 'active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  <tab.icon size={16} />
+                  <span className="tab-text">{tab.label}</span>
+                </button>
+              ))}
+            </nav>
           </div>
-          
-          <nav className="nav-tabs">
-            {[
-              { id: 'simulation', icon: Play, label: 'Simulation' },
-              { id: 'velocity', icon: Wind, label: 'Velocity' },
-              { id: 'temperature', icon: Thermometer, label: 'Temperature' },
-              { id: 'entropy', icon: BarChart3, label: 'Entropy' },
-              { id: 'ailab', icon: Brain, label: 'AI Lab' },
-              { id: 'videos', icon: Video, label: 'Videos' },
-              { id: 'figures', icon: Image, label: 'Figures' },
-              { id: 'theory', icon: BookOpen, label: 'Theory' }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                className={`nav-tab ${activeTab === tab.id ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                <tab.icon size={16} />
-                <span className="tab-text">{tab.label}</span>
-              </button>
-            ))}
-          </nav>
-        </div>
-      </header>
-      
-      <main className="main-content">
-        {activeTab === 'simulation' && renderSimulation()}
-        {activeTab === 'velocity' && renderVelocity()}
-        {activeTab === 'temperature' && renderTemperature()}
-        {activeTab === 'entropy' && renderEntropy()}
-        {activeTab === 'ailab' && renderAILab()}
-        {activeTab === 'videos' && renderVideos()}
-        {activeTab === 'figures' && renderFigures()}
-        {activeTab === 'theory' && renderTheory()}
-      </main>
-      
-      <FloatingControls />
-      
-      <footer className="footer">
-        <p>
-          <strong>Research:</strong> Thermal and Magnetohydrodynamic Analysis of Nanofluid Couette Flow<br/>
-          <strong>Candidate:</strong> Mr. S.I. Mosala | <strong>Supervisor:</strong> Prof. O.D. Makinde<br/>
-          Nelson Mandela University | December 2025
-        </p>
-      </footer>
-    </div>
+        </header>
+        
+        <main className="main-content">
+          {activeTab === 'simulation' && renderSimulation()}
+          {activeTab === 'velocity' && renderVelocity()}
+          {activeTab === 'temperature' && renderTemperature()}
+          {activeTab === 'entropy' && renderEntropy()}
+          {activeTab === 'ailab' && renderAILab()}
+          {activeTab === 'videos' && renderVideos()}
+          {activeTab === 'figures' && renderFigures()}
+          {activeTab === 'theory' && renderTheory()}
+        </main>
+        
+        <FloatingControls />
+        
+        <footer className="footer">
+          <p>
+            <strong>Research:</strong> Thermal and Magnetohydrodynamic Analysis of Nanofluid Couette Flow<br/>
+            <strong>Candidate:</strong> Mr. S.I. Mosala | <strong>Supervisor:</strong> Prof. O.D. Makinde<br/>
+            Nelson Mandela University | December 2025 | Version 3.5
+          </p>
+        </footer>
+      </div>
+    </ToastProvider>
   );
 }
 
