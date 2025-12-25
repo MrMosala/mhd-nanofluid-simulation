@@ -2027,6 +2027,7 @@ input[type="range"].smooth-slider::-moz-range-thumb:active {
   font-size: 0.9rem;
   color: var(--accent-cyan);
   line-height: 1.5;
+<<<<<<< HEAD
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -2300,4 +2301,6 @@ input[type="range"].smooth-slider::-moz-range-thumb:active {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+=======
+>>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
 }

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
   <rect width="100" height="100" rx="20" fill="#0a0e17"/>
   <rect x="15" y="35" width="70" height="4" fill="#00d4ff"/>
@@ -8,4 +9,16 @@
   <line x1="30" y1="40" x2="30" y2="60" stroke="#ffd700" stroke-width="1.5" stroke-dasharray="3,3"/>
   <line x1="50" y1="40" x2="50" y2="60" stroke="#ffd700" stroke-width="1.5" stroke-dasharray="3,3"/>
   <line x1="70" y1="40" x2="70" y2="60" stroke="#ffd700" stroke-width="1.5" stroke-dasharray="3,3"/>
+=======
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" rx="20" fill="#0a0e17"/>
+  <rect x="15" y="35" width="70" height="4" fill="#00d4ff"/>
+  <rect x="15" y="61" width="70" height="4" fill="#ff006e"/>
+  <path d="M25,50 L35,50 L32,47 M35,50 L32,53" stroke="#00ff9f" fill="none" stroke-width="2"/>
+  <path d="M50,50 L60,50 L57,47 M60,50 L57,53" stroke="#00ff9f" fill="none" stroke-width="2"/>
+  <path d="M75,50 L65,50 L68,47 M65,50 L68,53" stroke="#00ff9f" fill="none" stroke-width="2"/>
+  <line x1="30" y1="40" x2="30" y2="60" stroke="#ffd700" stroke-width="1.5" stroke-dasharray="3,3"/>
+  <line x1="50" y1="40" x2="50" y2="60" stroke="#ffd700" stroke-width="1.5" stroke-dasharray="3,3"/>
+  <line x1="70" y1="40" x2="70" y2="60" stroke="#ffd700" stroke-width="1.5" stroke-dasharray="3,3"/>
+>>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
 </svg>
