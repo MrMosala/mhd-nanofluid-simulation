@@ -2,16 +2,39 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#0a1628" />
+    
+    <!-- Favicon - Modern browsers (SVG) -->
+    <link rel="icon" type="image/svg+xml" href="%PUBLIC_URL%/favicon.svg" />
+    
+    <!-- Favicon - Legacy browsers (ICO) -->
+    <link rel="icon" type="image/x-icon" href="%PUBLIC_URL%/favicon.ico" />
+    <link rel="shortcut icon" href="%PUBLIC_URL%/favicon.ico" />
+    
+    <!-- Apple Touch Icon -->
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/favicon.svg" />
+    
+    <!-- Windows Metro Tile -->
+    <meta name="msapplication-TileColor" content="#0a0e17" />
+    <meta name="msapplication-TileImage" content="%PUBLIC_URL%/favicon.svg" />
+    
+    <!-- Theme colors -->
+    <meta name="theme-color" content="#0a0e17" />
+    <meta name="msapplication-navbutton-color" content="#0a0e17" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="#0a0e17" />
+    
+    <!-- Description -->
     <meta
       name="description"
       content="Interactive MHD Nanofluid Couette Flow Simulation - Research by Mr. S.I. Mosala, Nelson Mandela University"
     />
+    
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Title -->
     <title>MHD Nanofluid Couette Flow | Interactive Simulation</title>
   </head>
   <body>

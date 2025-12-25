@@ -4,12 +4,13 @@
   "description": "Interactive MHD Nanofluid Couette Flow Simulation - Research by Mr. S.I. Mosala",
   "private": true,
   "dependencies": {
+    "@supabase/supabase-js": "^2.89.0",
+    "framer-motion": "^10.16.4",
+    "lucide-react": "^0.263.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
-    "recharts": "^2.10.3",
-    "lucide-react": "^0.263.1",
-    "framer-motion": "^10.16.4"
+    "recharts": "^2.10.3"
   },
   "scripts": {
     "start": "react-scripts start",
