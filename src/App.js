@@ -8,7 +8,6 @@ import {
   X, ChevronDown, Wind, TrendingUp, Brain, Target,
   Cpu, Download, Copy, Check, Sparkles, FlaskConical,
   GitCompare, Lightbulb, Rocket, Award, Settings,
-<<<<<<< HEAD
   Upload, AlertTriangle,
   Moon, Sun, BarChart2, ChevronLeft, ChevronRight, HelpCircle
 } from 'lucide-react';
@@ -17,15 +16,8 @@ import { getUserId } from './supabaseClient';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PHYSICS ENGINE - MHD NANOFLUID COUETTE FLOW SOLVER
-=======
- Upload, AlertTriangle,
-  Moon, Sun, BarChart2, ChevronLeft, ChevronRight, HelpCircle
-} from 'lucide-react';
-
-// ═══════════════════════════════════════════════════════════════════════════
-// PHYSICS ENGINE - MHD NANOFLUID COUETTE FLOW SOLVER
 // Based on Proposal_Master.pdf equations
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 // ═══════════════════════════════════════════════════════════════════════════
 
 function solveMHDCouetteFlow(params) {
@@ -61,13 +53,13 @@ function solveMHDCouetteFlow(params) {
     }
     
     // Boundary conditions for W
-<<<<<<< HEAD
+
     W[0] = 0;
     W[N] = (Re + lambda * W[N-1] / h) / (1 + lambda / h);
-=======
+
     W[0] = 0;  // Lower plate: no-slip
     W[N] = (Re + lambda * W[N-1] / h) / (1 + lambda / h);  // Upper plate: slip
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
     
     // Calculate W' for energy equation
     const Wp = new Array(N + 1).fill(0);
@@ -77,11 +69,11 @@ function solveMHDCouetteFlow(params) {
     Wp[0] = (W[1] - W[0]) / h;
     Wp[N] = (W[N] - W[N-1]) / h;
     
-<<<<<<< HEAD
+
     // Solve energy equation
-=======
+
     // Solve energy equation: A3*θ'' + A1*Pr*Ec*(W')² + A2*Pr*Ec*Ha²*W² = 0
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
     for (let i = 1; i < N; i++) {
       const source = A1 * Pr * Ec * Wp[i] * Wp[i] + A2 * Pr * Ec * Ha * Ha * W[i] * W[i];
       const coeff = A3 / (h * h);
@@ -90,13 +82,13 @@ function solveMHDCouetteFlow(params) {
     }
     
     // Boundary conditions for Theta
-<<<<<<< HEAD
+
     Theta[0] = 1;
     Theta[N] = Theta[N-1] / (1 + h * Bi);
-=======
+
     Theta[0] = 1;  // Lower plate: fixed temperature
     Theta[N] = Theta[N-1] / (1 + h * Bi);  // Upper plate: convective
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
     
     // Check convergence
     let maxDiff = 0;
@@ -168,14 +160,9 @@ function solveMHDCouetteFlow(params) {
     maxW: Math.max(...W),
     minTheta: Math.min(...Theta),
     maxTheta: Math.max(...Theta),
-    avgBe: Be.reduce((a, b) => a + b, 0) / Be.length,
-<<<<<<< HEAD
+avgBe: Be.reduce((a, b) => a + b, 0) / Be.length,
     convergenceTime: Date.now(),
     params: { ...params }
-=======
-    convergenceTime: Date.now(), // For performance tracking
-    params: { ...params } // Store parameters for reference
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
   };
 }
 
@@ -183,10 +170,10 @@ function solveMHDCouetteFlow(params) {
 // MACHINE LEARNING ENGINE
 // ═══════════════════════════════════════════════════════════════════════════
 
-<<<<<<< HEAD
-=======
+
+
 // Neural Network for instant predictions
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 class SimpleNeuralNetwork {
   predict(inputs) {
     const Ha = inputs.Ha || 2;
@@ -213,10 +200,10 @@ class SimpleNeuralNetwork {
   }
 }
 
-<<<<<<< HEAD
-=======
+
+
 // Genetic Algorithm Optimizer
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 class GeneticOptimizer {
   constructor(fitnessFunction, bounds, options = {}) {
     this.fitnessFunction = fitnessFunction;
@@ -325,16 +312,16 @@ class GeneticOptimizer {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-<<<<<<< HEAD
+
 // COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════
 
-=======
+
 // NEW FEATURES - ADDED COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════
 
 // 1. Toast Notification System
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 const ToastContext = React.createContext();
 
 const ToastProvider = ({ children }) => {
@@ -363,10 +350,10 @@ const ToastProvider = ({ children }) => {
   );
 };
 
-<<<<<<< HEAD
-=======
+
+
 // 2. Advanced Analytics Dashboard Component
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 const AnalyticsDashboard = ({ solution, previousSolution }) => {
   const calculateMetrics = useMemo(() => {
     if (!solution) return null;
@@ -461,10 +448,10 @@ const AnalyticsDashboard = ({ solution, previousSolution }) => {
   );
 };
 
-<<<<<<< HEAD
-=======
+
+
 // 3. Sensitivity Analysis Component
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 const SensitivityAnalysis = ({ params, baseSolution }) => {
   const [sensitivity, setSensitivity] = useState([]);
   
@@ -476,24 +463,13 @@ const SensitivityAnalysis = ({ params, baseSolution }) => {
       
       parameters.forEach(param => {
         if (param in baseParams) {
-<<<<<<< HEAD
+
           const plusParams = { ...baseParams, [param]: baseParams[param] * 1.1 };
           const plusSolution = solveMHDCouetteFlow(plusParams);
           
           const minusParams = { ...baseParams, [param]: baseParams[param] * 0.9 };
           const minusSolution = solveMHDCouetteFlow(minusParams);
-          
-=======
-          // Calculate +10% variation
-          const plusParams = { ...baseParams, [param]: baseParams[param] * 1.1 };
-          const plusSolution = solveMHDCouetteFlow(plusParams);
-          
-          // Calculate -10% variation
-          const minusParams = { ...baseParams, [param]: baseParams[param] * 0.9 };
-          const minusSolution = solveMHDCouetteFlow(minusParams);
-          
-          // Calculate sensitivity index
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
           const deltaNu = Math.abs(plusSolution.Nu_lower - minusSolution.Nu_lower) / 
                          (Math.abs(baseSolution.Nu_lower) + 0.001);
           const deltaCf = Math.abs(plusSolution.Cf_lower - minusSolution.Cf_lower) / 
@@ -514,10 +490,10 @@ const SensitivityAnalysis = ({ params, baseSolution }) => {
         }
       });
       
-<<<<<<< HEAD
-=======
+
+
       // Sort by sensitivity
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
       variations.sort((a, b) => b.sensitivity - a.sensitivity);
       setSensitivity(variations);
     };
@@ -584,10 +560,10 @@ const SensitivityAnalysis = ({ params, baseSolution }) => {
   );
 };
 
-<<<<<<< HEAD
-=======
+
+
 // 4. Performance Benchmarking Component
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 const PerformanceBenchmark = ({ solution }) => {
   const benchmarks = useMemo(() => ({
     'Pure Water (Base)': { 
@@ -703,10 +679,10 @@ const PerformanceBenchmark = ({ solution }) => {
   );
 };
 
-<<<<<<< HEAD
-=======
+
+
 // 5. Simple State Management Component
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 const StateManagement = ({ params, setParams, showToast }) => {
   const fileInputRef = useRef(null);
   
@@ -751,10 +727,10 @@ const StateManagement = ({ params, setParams, showToast }) => {
     };
     reader.readAsText(file);
     
-<<<<<<< HEAD
-=======
+
+
     // Reset file input
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
     event.target.value = '';
   }, [setParams, showToast]);
   
@@ -801,10 +777,10 @@ const StateManagement = ({ params, setParams, showToast }) => {
   );
 };
 
-<<<<<<< HEAD
-=======
+
+
 // 6. Educational Tutorial Component
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 const PhysicsTutorial = () => {
   const [currentStep, setCurrentStep] = useState(0);
   
@@ -875,10 +851,10 @@ const PhysicsTutorial = () => {
   );
 };
 
-<<<<<<< HEAD
-=======
+
+
 // 7. Citation Helper Component
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 const CitationHelper = ({ params }) => {
   const generateCitation = () => {
     const date = new Date();
@@ -917,20 +893,20 @@ Parameters: Ha = ${params.Ha}, Re = ${params.Re}, Pr = ${params.Pr}, Ec = ${para
   );
 };
 
-<<<<<<< HEAD
-=======
+
+
 // 8. Parameter Validation Warnings
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 const ParameterWarnings = ({ params, solution }) => {
   const [warnings, setWarnings] = useState([]);
   
   useEffect(() => {
     const newWarnings = [];
     
-<<<<<<< HEAD
-=======
+
+
     // Validate parameters
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
     if (params.Ha > 5 && params.Re < 1) {
       newWarnings.push("High Hartmann number with low Reynolds may cause stagnation");
     }
@@ -977,10 +953,10 @@ const ParameterWarnings = ({ params, solution }) => {
   );
 };
 
-<<<<<<< HEAD
-=======
+
+
 // 9. Theme Switcher Component
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 const ThemeSwitcher = () => {
   const [theme, setTheme] = useState('dark');
   
@@ -988,26 +964,13 @@ const ThemeSwitcher = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(newTheme);
     
-<<<<<<< HEAD
     document.documentElement.setAttribute('data-theme', newTheme);
     
-=======
-    // Apply theme change
-    document.documentElement.setAttribute('data-theme', newTheme);
-    
-    // You would need to define light theme CSS variables
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
     if (newTheme === 'light') {
       document.documentElement.style.setProperty('--bg-primary', '#f8f9fa');
       document.documentElement.style.setProperty('--text-primary', '#1a1a1a');
       document.documentElement.style.setProperty('--text-secondary', '#4a5568');
-<<<<<<< HEAD
     } else {
-=======
-      // ... more light theme variables
-    } else {
-      // Reset to dark theme
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
       document.documentElement.style.setProperty('--bg-primary', '#0a0e17');
       document.documentElement.style.setProperty('--text-primary', '#ffffff');
       document.documentElement.style.setProperty('--text-secondary', 'rgba(255, 255, 255, 0.75)');
@@ -1024,10 +987,10 @@ const ThemeSwitcher = () => {
   );
 };
 
-<<<<<<< HEAD
-=======
+
+
 // 10. Language Switcher Component
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 const LanguageSwitcher = () => {
   const [language, setLanguage] = useState('en');
   
@@ -1057,11 +1020,11 @@ const LanguageSwitcher = () => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-<<<<<<< HEAD
+
 // PARAMETER PRESETS & FIGURE DATA
-=======
+
 // PARAMETER PRESETS
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 // ═══════════════════════════════════════════════════════════════════════════
 
 const PARAMETER_PRESETS = {
@@ -1115,13 +1078,13 @@ const PARAMETER_PRESETS = {
   }
 };
 
-<<<<<<< HEAD
-=======
+
+
 // ═══════════════════════════════════════════════════════════════════════════
 // FIGURE DATA
 // ═══════════════════════════════════════════════════════════════════════════
 
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 const FIGURE_DESCRIPTIONS = {
   'Grid_Convergence.png': {
     title: "Grid Convergence Study",
@@ -1163,11 +1126,7 @@ const FIGURE_DESCRIPTIONS = {
     description: "Surface plots of engineering quantities in Ha-Re parameter space.",
     results: "Skin friction surface shows complex nonlinear interactions. Maximum heat transfer occurs at moderate Re (2-3) with low Ha. 3D visualization reveals saddle points indicating trade-offs between drag and heat transfer."
   },
-<<<<<<< HEAD
   '3D_Pr_Ec_Surface_Plot.png': {
-=======
-  '3D_Pr_Ec_Surface_Plot.png': {  // ADD THIS NEW ENTRY
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
     title: "3D Parameter Space: Prandtl vs Eckert Number",
     description: "Surface plots of Nusselt number in Pr-Ec parameter space.",
     results: "Heat transfer enhancement shows nonlinear dependence on Pr and Ec. Maximum Nu occurs at high Pr (>10) and moderate Ec (0.05-0.07). Strong coupling observed between viscous dissipation and thermal diffusivity effects."
@@ -1195,11 +1154,11 @@ const FIGURE_DESCRIPTIONS = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-<<<<<<< HEAD
+
 // CUSTOM COMPONENTS (Continued...)
-=======
+
 // CUSTOM COMPONENTS
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 // ═══════════════════════════════════════════════════════════════════════════
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -1226,10 +1185,10 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-<<<<<<< HEAD
-=======
+
+
 // FIXED: Improved ParameterSlider with smooth dragging
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 const ParameterSlider = ({ label, value, onChange, min, max, step, unit, description, onChangeEnd }) => {
   const [tempValue, setTempValue] = useState(value);
   const [isDragging, setIsDragging] = useState(false);
@@ -1241,10 +1200,10 @@ const ParameterSlider = ({ label, value, onChange, min, max, step, unit, descrip
   const handleChange = (e) => {
     const newValue = parseFloat(e.target.value);
     setTempValue(newValue);
-<<<<<<< HEAD
-=======
+
+
     // Update immediately for smoother experience
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
     onChange(newValue);
     setIsDragging(true);
   };
@@ -1281,10 +1240,10 @@ const ParameterSlider = ({ label, value, onChange, min, max, step, unit, descrip
   );
 };
 
-<<<<<<< HEAD
-=======
+
+
 // Parameter Accordion Component - FIXED: Keep accordions open by default
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 const ParamAccordion = ({ title, icon: Icon, children, defaultOpen = true }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   
@@ -1309,10 +1268,10 @@ const ParamAccordion = ({ title, icon: Icon, children, defaultOpen = true }) => 
   );
 };
 
-<<<<<<< HEAD
-=======
+
+
 // Flow Visualization Canvas Component
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 const FlowVisualization = ({ params, solution }) => {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
@@ -1343,10 +1302,10 @@ const FlowVisualization = ({ params, solution }) => {
       ctx.fillStyle = 'rgba(10, 14, 23, 0.12)';
       ctx.fillRect(0, 0, width / 2, height / 2);
       
-<<<<<<< HEAD
-=======
+
+
       // Draw plates
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
       const gradient1 = ctx.createLinearGradient(0, 0, width / 2, 0);
       gradient1.addColorStop(0, 'rgba(0, 212, 255, 0.6)');
       gradient1.addColorStop(1, 'rgba(0, 212, 255, 0.2)');
@@ -1359,10 +1318,10 @@ const FlowVisualization = ({ params, solution }) => {
       ctx.fillStyle = gradient2;
       ctx.fillRect(0, height / 2 - 4, width / 2, 4);
       
-<<<<<<< HEAD
-=======
+
+
       // Draw magnetic field lines
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
       ctx.strokeStyle = 'rgba(255, 215, 0, 0.08)';
       ctx.lineWidth = 1;
       ctx.setLineDash([5, 10]);
@@ -1374,10 +1333,10 @@ const FlowVisualization = ({ params, solution }) => {
       }
       ctx.setLineDash([]);
       
-<<<<<<< HEAD
-=======
+
+
       // Update and draw particles
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
       particlesRef.current.forEach((p) => {
         const eta = 1 - (p.y / (height / 2));
         const etaClamped = Math.max(0, Math.min(1, eta));
@@ -1401,10 +1360,10 @@ const FlowVisualization = ({ params, solution }) => {
         ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${p.alpha})`;
         ctx.fill();
         
-<<<<<<< HEAD
-=======
+
+
         // Glow effect
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
         const glowGradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 4);
         glowGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${p.alpha * 0.4})`);
         glowGradient.addColorStop(1, 'transparent');
@@ -1414,10 +1373,10 @@ const FlowVisualization = ({ params, solution }) => {
         ctx.fill();
       });
       
-<<<<<<< HEAD
-=======
+
+
       // Labels
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
       ctx.font = '12px Orbitron';
       ctx.fillStyle = 'rgba(0, 212, 255, 0.9)';
       ctx.fillText('Upper Plate (Moving) → Re = ' + params.Re.toFixed(1), 10, 22);
@@ -1449,10 +1408,10 @@ const FlowVisualization = ({ params, solution }) => {
   );
 };
 
-<<<<<<< HEAD
-=======
+
+
 // Figure Component
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
 const ResearchFigure = ({ filename, title, description, results }) => {
   const [imageError, setImageError] = useState(false);
   
@@ -1500,10 +1459,10 @@ function App() {
   const [copied, setCopied] = useState(false);
   const [previousSolution, setPreviousSolution] = useState(null);
   
-<<<<<<< HEAD
-=======
+
+
   // Main parameters
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
   const [params, setParams] = useState({
     A1: 1.2, A2: 1.5, A3: 1.3,
     Re: 1.0, Ha: 2.0, G: 0.5, lambda: 0.1,
@@ -1511,17 +1470,12 @@ function App() {
     N: 100
   });
   
-<<<<<<< HEAD
-  const [compareMode, setCompareMode] = useState(false);
-  const [compareParams, setCompareParams] = useState({ ...params });
-  
-=======
-  // Comparison mode state
+
   const [compareMode, setCompareMode] = useState(false);
   const [compareParams, setCompareParams] = useState({ ...params });
   
   // AI Lab state
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
   const [optimizerRunning, setOptimizerRunning] = useState(false);
   const [optimizerProgress, setOptimizerProgress] = useState(null);
   const [optimizerResult, setOptimizerResult] = useState(null);
@@ -1529,7 +1483,7 @@ function App() {
   const [nnPrediction, setNnPrediction] = useState(null);
   const [aiRecommendations, setAiRecommendations] = useState([]);
   
-<<<<<<< HEAD
+
   // ═══════════════════════════════════════════════════════════════════════
   // ML FEATURES - NEW STATE
   // ═══════════════════════════════════════════════════════════════════════
@@ -1553,18 +1507,9 @@ function App() {
     console.log(`[${type.toUpperCase()}]: ${message}`);
   }, []);
   
-=======
-  // Neural network instance
-  const neuralNetwork = useMemo(() => new SimpleNeuralNetwork(), []);
-  
-  // Toast notifications - simple console version
-  const showToast = useCallback((message, type = 'info') => {
-    console.log(`[${type.toUpperCase()}]: ${message}`);
-    // You could enhance this with actual toast notifications later
-  }, []);
-  
+
   // Solutions
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
   const solution = useMemo(() => {
     const sol = solveMHDCouetteFlow(params);
     setPreviousSolution(sol);
@@ -1581,10 +1526,10 @@ function App() {
     setCompareParams(prev => ({ ...prev, [key]: value }));
   }, []);
   
-<<<<<<< HEAD
-=======
+
+
   // Apply preset
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
   const applyPreset = useCallback((presetKey) => {
     const preset = PARAMETER_PRESETS[presetKey];
     if (preset) {
@@ -1593,7 +1538,7 @@ function App() {
     }
   }, [showToast]);
   
-<<<<<<< HEAD
+
   // ═══════════════════════════════════════════════════════════════════════
   // ML FEATURES - LOAD STATS ON MOUNT
   // ═══════════════════════════════════════════════════════════════════════
@@ -1616,18 +1561,18 @@ function App() {
     }
   }, [solution, params, optimizationGoal, saveSimulationForML]);
   
-=======
+
   // Neural Network prediction
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
   useEffect(() => {
     const prediction = neuralNetwork.predict(params);
     setNnPrediction(prediction);
   }, [params, neuralNetwork]);
   
-<<<<<<< HEAD
-=======
+
+
   // Generate AI recommendations
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
   useEffect(() => {
     const recommendations = [];
     
@@ -1682,10 +1627,10 @@ function App() {
     setAiRecommendations(recommendations.slice(0, 4));
   }, [params, solution]);
   
-<<<<<<< HEAD
-=======
+
+
   // Run optimizer
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
   const runOptimizer = async () => {
     setOptimizerRunning(true);
     setOptimizerResult(null);
@@ -1752,10 +1697,10 @@ function App() {
     showToast('Optimization complete! Optimal parameters found.', 'success');
   };
   
-<<<<<<< HEAD
-=======
+
+
   // Apply optimizer result
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
   const applyOptimizerResult = () => {
     if (optimizerResult?.bestIndividual) {
       setParams(prev => ({ ...prev, ...optimizerResult.bestIndividual }));
@@ -1763,10 +1708,10 @@ function App() {
     }
   };
   
-<<<<<<< HEAD
-=======
+
+
   // Export data as CSV
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
   const exportCSV = () => {
     const headers = ['eta', 'W', 'Theta', 'Wp', 'Thetap', 'Ns', 'Be', 'Ns_heat', 'Ns_fluid', 'Ns_magnetic'];
     const rows = solution.chartData.map(d => 
@@ -1785,10 +1730,10 @@ function App() {
     showToast('CSV data exported successfully!', 'success');
   };
   
-<<<<<<< HEAD
-=======
+
+
   // Copy parameters to clipboard
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
   const copyParams = () => {
     const paramString = JSON.stringify(params, null, 2);
     navigator.clipboard.writeText(paramString);
@@ -1871,10 +1816,10 @@ function App() {
     </>
   );
 
-<<<<<<< HEAD
-=======
+
+
   // Results Panel Component
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
   const ResultsPanel = ({ sol = solution, label = '' }) => (
     <div className="results-panel">
       <div className="result-card cyan">
@@ -1897,11 +1842,11 @@ function App() {
   );
 
   // ═══════════════════════════════════════════════════════════════════════════
-<<<<<<< HEAD
+
   // TAB RENDERERS (Keeping existing render functions - only showing renderAILab with ML additions)
-=======
+
   // TAB RENDERERS
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
   // ═══════════════════════════════════════════════════════════════════════════
 
   const renderSimulation = () => (
@@ -2535,7 +2480,7 @@ function App() {
       {/* Performance Benchmarking */}
       <PerformanceBenchmark solution={solution} />
       
-<<<<<<< HEAD
+
       {/* ═══════════════════════════════════════════════════════════════ */}
       {/* ML TRAINING STATISTICS - NEW */}
       {/* ═══════════════════════════════════════════════════════════════ */}
@@ -2711,8 +2656,8 @@ function App() {
         </div>
       </div>
       
-=======
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
+
       {/* AI Recommendations */}
       <div className="ai-section">
         <div className="ai-section-header">
@@ -3101,11 +3046,9 @@ function App() {
     </div>
   );
 
-<<<<<<< HEAD
-return (
-=======
+
   return (
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+
     <ToastProvider>
       <div className="app">
         <ThemeSwitcher />
