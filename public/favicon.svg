@@ -1,24 +1,27 @@
-<<<<<<< HEAD
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="20" fill="#0a0e17"/>
-  <rect x="15" y="35" width="70" height="4" fill="#00d4ff"/>
-  <rect x="15" y="61" width="70" height="4" fill="#ff006e"/>
-  <path d="M25,50 L35,50 L32,47 M35,50 L32,53" stroke="#00ff9f" fill="none" stroke-width="2"/>
-  <path d="M50,50 L60,50 L57,47 M60,50 L57,53" stroke="#00ff9f" fill="none" stroke-width="2"/>
-  <path d="M75,50 L65,50 L68,47 M65,50 L68,53" stroke="#00ff9f" fill="none" stroke-width="2"/>
-  <line x1="30" y1="40" x2="30" y2="60" stroke="#ffd700" stroke-width="1.5" stroke-dasharray="3,3"/>
-  <line x1="50" y1="40" x2="50" y2="60" stroke="#ffd700" stroke-width="1.5" stroke-dasharray="3,3"/>
-  <line x1="70" y1="40" x2="70" y2="60" stroke="#ffd700" stroke-width="1.5" stroke-dasharray="3,3"/>
-=======
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="20" fill="#0a0e17"/>
-  <rect x="15" y="35" width="70" height="4" fill="#00d4ff"/>
-  <rect x="15" y="61" width="70" height="4" fill="#ff006e"/>
-  <path d="M25,50 L35,50 L32,47 M35,50 L32,53" stroke="#00ff9f" fill="none" stroke-width="2"/>
-  <path d="M50,50 L60,50 L57,47 M60,50 L57,53" stroke="#00ff9f" fill="none" stroke-width="2"/>
-  <path d="M75,50 L65,50 L68,47 M65,50 L68,53" stroke="#00ff9f" fill="none" stroke-width="2"/>
-  <line x1="30" y1="40" x2="30" y2="60" stroke="#ffd700" stroke-width="1.5" stroke-dasharray="3,3"/>
-  <line x1="50" y1="40" x2="50" y2="60" stroke="#ffd700" stroke-width="1.5" stroke-dasharray="3,3"/>
-  <line x1="70" y1="40" x2="70" y2="60" stroke="#ffd700" stroke-width="1.5" stroke-dasharray="3,3"/>
->>>>>>> b9b39b3666b3610bec0c6f461345094d407faee8
+  <defs>
+    <linearGradient id="waveGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9d4edd;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#ff006e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ffbe0b;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Wave path representing fluid flow -->
+  <path d="M 10 50 Q 30 30, 50 50 T 90 50" 
+        stroke="url(#waveGradient)" 
+        stroke-width="8" 
+        fill="none" 
+        stroke-linecap="round"/>
+  
+  <!-- Second wave -->
+  <path d="M 10 60 Q 30 40, 50 60 T 90 60" 
+        stroke="url(#waveGradient)" 
+        stroke-width="6" 
+        fill="none" 
+        opacity="0.6"
+        stroke-linecap="round"/>
+  
+  <!-- Magnetic field indicator -->
+  <circle cx="50" cy="50" r="3" fill="#00d4ff" opacity="0.8"/>
 </svg>
