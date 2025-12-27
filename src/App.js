@@ -56,7 +56,6 @@ function solveMHDCouetteFlow(params) {
 
     W[0] = 0;  // Lower plate: no-slip
     W[N] = (Re - lambda * W[N-1] / h) / (1 - lambda / h);  // Upper plate: slip
-
     
     // Calculate W' for energy equation
     const Wp = new Array(N + 1).fill(0);
