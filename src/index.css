@@ -1878,8 +1878,8 @@ input[type="range"].smooth-slider::-moz-range-thumb:active {
 /* Language Switcher */
 .language-switcher {
   position: fixed;
-  top: 20px;
-  right: 100px;
+  top: 90px;  /* Changed from 20px - positions below header */
+  right: 20px;
   z-index: 101;
 }
 
@@ -1931,11 +1931,42 @@ input[type="range"].smooth-slider::-moz-range-thumb:active {
 .toast.error { border-color: var(--accent-magenta); }
 .toast.info { border-color: var(--accent-cyan); }
 
-/* Theme Switcher */
+/* ═══════════════════════════════════════════════════════════════
+   THEME & LANGUAGE SWITCHERS - DESKTOP
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Language Switcher - Desktop */
+.language-switcher {
+  position: fixed;
+  top: 55px;  /* Changed from 20px - positions below header */
+  right: 20px;
+  z-index: 101;
+}
+
+.language-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-xs) var(--space-sm);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.language-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+/* Theme Switcher - Desktop */
 .theme-switcher {
   position: fixed;
-  top: 20px;
-  left: 20px;
+  top: 55px;
+  right: 180px;
   z-index: 101;
 }
 
@@ -1958,14 +1989,20 @@ input[type="range"].smooth-slider::-moz-range-thumb:active {
   color: var(--accent-cyan);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE
+   ═══════════════════════════════════════════════════════════════ */
+
 /* Mobile Enhancements */
 @media (max-width: 768px) {
   .analytics-grid, .benchmark-grid {
     grid-template-columns: 1fr;
   }
   
-  .language-switcher, .theme-switcher {
-    position: static;
+  /* ✅ FIX: Both switchers to static positioning on mobile */
+  .language-switcher, 
+  .theme-switcher {
+    position: static;  /* Changed from fixed */
     margin: var(--space-sm) auto;
     display: inline-block;
   }
@@ -1987,6 +2024,13 @@ input[type="range"].smooth-slider::-moz-range-thumb:active {
   .tutorial-controls {
     flex-direction: column;
     gap: var(--space-sm);
+  }
+}
+
+/* OPTIONAL: Tablet optimization (769px - 1200px) */
+@media (min-width: 769px) and (max-width: 1200px) {
+  .theme-switcher {
+    right: 160px;  /* Slightly closer spacing on tablets */
   }
 }
 
