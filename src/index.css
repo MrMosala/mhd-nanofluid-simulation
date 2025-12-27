@@ -1934,7 +1934,6 @@ input[type="range"].smooth-slider::-moz-range-thumb:active {
 /* ═══════════════════════════════════════════════════════════════
    THEME & LANGUAGE SWITCHERS - DESKTOP
    ═══════════════════════════════════════════════════════════════ */
-
 /* Language Switcher - Desktop */
 .language-switcher {
   position: fixed;
