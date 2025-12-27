@@ -1935,12 +1935,14 @@ input[type="range"].smooth-slider::-moz-range-thumb:active {
    THEME & LANGUAGE SWITCHERS - DESKTOP
    ═══════════════════════════════════════════════════════════════ */
 /* Language Switcher - Desktop */
+
 .language-switcher {
   position: fixed;
-  top: 55px;  /* Changed from 20px - positions below header */
+  top: 55px;  
   right: 20px;
   z-index: 101;
 }
+
 
 .language-btn {
   background: var(--bg-tertiary);
