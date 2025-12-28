@@ -195,7 +195,7 @@ function computeNanofluidProperties(phi, nanoparticleType) {
       rho: 3970,       // Density [kg/m³]
       Cp: 765,         // Specific heat [J/(kg·K)]
       k: 40,           // Thermal conductivity [W/(m·K)]
-      sigma: 35e6      // Electrical conductivity [S/m]
+      sigma: 1e-10      // Electrical conductivity [S/m]
     }
   };
   
