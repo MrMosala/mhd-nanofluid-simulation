@@ -20,97 +20,205 @@ import { getUserId } from './supabaseClient';
 
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════
+// CORRECTED MHD NANOFLUID COUETTE FLOW SOLVER
+// Matches Proposal_Master.pdf equations exactly
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Thomas algorithm for tridiagonal systems
+function solveTridiagonal(a, b, c, d) {
+  const n = d.length;
+  const cp = new Array(n);
+  const dp = new Array(n);
+  const x = new Array(n);
+  
+  // Forward elimination
+  cp[0] = c[0] / b[0];
+  dp[0] = d[0] / b[0];
+  
+  for (let i = 1; i < n; i++) {
+    const m = 1.0 / (b[i] - a[i] * cp[i-1]);
+    cp[i] = c[i] * m;
+    dp[i] = (d[i] - a[i] * dp[i-1]) * m;
+  }
+  
+  // Back substitution
+  x[n-1] = dp[n-1];
+  for (let i = n-2; i >= 0; i--) {
+    x[i] = dp[i] - cp[i] * x[i+1];
+  }
+  
+  return x;
+}
+
 function solveMHDCouetteFlow(params) {
   const { A1, A2, A3, Re, Ha, Pr, Ec, Bi, lambda, G, N = 100 } = params;
   
-  const eta = [];
+  // Grid definition (η ∈ [0, 1])
   const h = 1.0 / N;
+  const eta = [];
   for (let i = 0; i <= N; i++) {
     eta.push(i * h);
   }
   
+  // Initial guesses
   let W = new Array(N + 1).fill(0);
-  let Theta = new Array(N + 1).fill(1);
+  let Theta = new Array(N + 1).fill(0);
   
-  // Initial guess satisfying boundary conditions
+  // Initial guess: linear velocity with slip, linear temperature
   for (let i = 0; i <= N; i++) {
-    W[i] = eta[i] * Re / (1 - lambda);
-    Theta[i] = 1 - (Bi / (1 + Bi)) * eta[i];
+    const eta_val = eta[i];
+    W[i] = (Re * eta_val) / (1 + lambda);
+    Theta[i] = (1 - eta_val) * 0.5;
   }
   
-  const maxIter = 100;
+  const maxIter = 500;
   const tol = 1e-8;
   
+  // Main iteration loop
   for (let iter = 0; iter < maxIter; iter++) {
+    // Store old values for convergence check
     const W_old = [...W];
     const Theta_old = [...Theta];
     
-    // Solve momentum equation: A1*W'' - A2*Ha²*W + G = 0
+    // ──────────────────────────────────────────────────────────────
+    // STEP 1: Solve momentum equation: A₁·W'' - A₂·Ha²·W + G = 0
+    // ──────────────────────────────────────────────────────────────
+    const a_mom = new Array(N + 1).fill(0);
+    const b_mom = new Array(N + 1).fill(0);
+    const c_mom = new Array(N + 1).fill(0);
+    const d_mom = new Array(N + 1).fill(0);
+    
+    // Interior points
     for (let i = 1; i < N; i++) {
-      const coeff = A1 / (h * h);
-      const diag = 2 * A1 / (h * h) + A2 * Ha * Ha;
-      W[i] = (coeff * (W_old[i-1] + W_old[i+1]) + G) / diag;
+      a_mom[i] = A1 / (h * h);
+      b_mom[i] = -2 * A1 / (h * h) - A2 * Ha * Ha;
+      c_mom[i] = A1 / (h * h);
+      d_mom[i] = -G;
     }
     
-    // Boundary conditions for W
-
-    W[0] = 0;  // Lower plate: no-slip
-    W[N] = (Re - lambda * W[N-1] / h) / (1 - lambda / h);  // Upper plate: slip
+    // Boundary Conditions:
+    // Lower plate (η = 0): W(0) = 0
+    a_mom[0] = 0;
+    b_mom[0] = 1;
+    c_mom[0] = 0;
+    d_mom[0] = 0;
     
-    // Calculate W' for energy equation
+    // Upper plate (η = 1): W(1) = Re - λ·dW/dη(1)
+    // Using backward difference: dW/dη(1) ≈ (W[N] - W[N-1])/h
+    // W[N] = Re - λ·(W[N] - W[N-1])/h
+    // Rearranged: (1 + λ/h)·W[N] - (λ/h)·W[N-1] = Re
+    a_mom[N] = -lambda / h;
+    b_mom[N] = 1 + lambda / h;
+    c_mom[N] = 0;
+    d_mom[N] = Re;
+    
+    // Solve for W
+    const W_new = solveTridiagonal(a_mom, b_mom, c_mom, d_mom);
+    
+    // ──────────────────────────────────────────────────────────────
+    // STEP 2: Compute velocity gradient W'
+    // ──────────────────────────────────────────────────────────────
     const Wp = new Array(N + 1).fill(0);
-    for (let i = 1; i < N; i++) {
-      Wp[i] = (W[i+1] - W[i-1]) / (2 * h);
-    }
-    Wp[0] = (W[1] - W[0]) / h;
-    Wp[N] = (W[N] - W[N-1]) / h;
     
-
-    // Solve energy equation
-
-    // Solve energy equation: A3*θ'' + A1*Pr*Ec*(W')² + A2*Pr*Ec*Ha²*W² = 0
-
+    // Interior points: central difference
     for (let i = 1; i < N; i++) {
-      const source = A1 * Pr * Ec * Wp[i] * Wp[i] + A2 * Pr * Ec * Ha * Ha * W[i] * W[i];
-      const coeff = A3 / (h * h);
-      const diag = 2 * A3 / (h * h);
-      Theta[i] = (coeff * (Theta_old[i-1] + Theta_old[i+1]) + source) / diag;
+      Wp[i] = (W_new[i+1] - W_new[i-1]) / (2 * h);
     }
     
-    // Boundary conditions for Theta
-
-    Theta[0] = 1;  // Lower plate: fixed temperature
-    Theta[N] = Theta[N-1] / (1 + h * Bi);  // Upper plate: convective
-
+    // Boundaries: one-sided differences (2nd order)
+    Wp[0] = (-3 * W_new[0] + 4 * W_new[1] - W_new[2]) / (2 * h);
+    Wp[N] = (3 * W_new[N] - 4 * W_new[N-1] + W_new[N-2]) / (2 * h);
     
-    // Check convergence
+    // ──────────────────────────────────────────────────────────────
+    // STEP 3: Solve energy equation
+    // A₃·θ'' + A₁·Pr·Ec·(W')² + A₂·Pr·Ec·Ha²·W² = 0
+    // ──────────────────────────────────────────────────────────────
+    const a_eng = new Array(N + 1).fill(0);
+    const b_eng = new Array(N + 1).fill(0);
+    const c_eng = new Array(N + 1).fill(0);
+    const d_eng = new Array(N + 1).fill(0);
+    
+    // Interior points
+    for (let i = 1; i < N; i++) {
+      const viscousHeating = A1 * Pr * Ec * Wp[i] * Wp[i];
+      const jouleHeating = A2 * Pr * Ec * Ha * Ha * W_new[i] * W_new[i];
+      const source = viscousHeating + jouleHeating;
+      
+      a_eng[i] = A3 / (h * h);
+      b_eng[i] = -2 * A3 / (h * h);
+      c_eng[i] = A3 / (h * h);
+      d_eng[i] = -source;
+    }
+    
+    // Boundary Conditions:
+    // Lower plate (η = 0): θ(0) = 0
+    a_eng[0] = 0;
+    b_eng[0] = 1;
+    c_eng[0] = 0;
+    d_eng[0] = 0;
+    
+    // Upper plate (η = 1): dθ/dη(1) = -Bi·θ(1)
+    // Using backward difference: dθ/dη(1) ≈ (θ[N] - θ[N-1])/h
+    // (θ[N] - θ[N-1])/h = -Bi·θ[N]
+    // Rearranged: (1/h)·θ[N-1] - (1/h + Bi)·θ[N] = 0
+    a_eng[N] = 1 / h;
+    b_eng[N] = -(1 / h + Bi);
+    c_eng[N] = 0;
+    d_eng[N] = 0;
+    
+    // Solve for Theta
+    const Theta_new = solveTridiagonal(a_eng, b_eng, c_eng, d_eng);
+    
+    // ──────────────────────────────────────────────────────────────
+    // STEP 4: Check convergence
+    // ──────────────────────────────────────────────────────────────
     let maxDiff = 0;
     for (let i = 0; i <= N; i++) {
-      maxDiff = Math.max(maxDiff, Math.abs(W[i] - W_old[i]), Math.abs(Theta[i] - Theta_old[i]));
+      const diffW = Math.abs(W_new[i] - W_old[i]);
+      const diffTheta = Math.abs(Theta_new[i] - Theta_old[i]);
+      maxDiff = Math.max(maxDiff, diffW, diffTheta);
     }
-    if (maxDiff < tol) break;
+    
+    // Update solutions
+    W = W_new;
+    Theta = Theta_new;
+    
+    if (maxDiff < tol) {
+      console.log(`✅ MHD Solver converged in ${iter + 1} iterations`);
+      break;
+    }
   }
   
-  // Calculate derivatives
-  const Wp = new Array(N + 1).fill(0);
-  const Thetap = new Array(N + 1).fill(0);
+  // ──────────────────────────────────────────────────────────────
+  // STEP 5: Calculate derivatives for engineering quantities
+  // ──────────────────────────────────────────────────────────────
+  const Wp_final = new Array(N + 1).fill(0);
+  const Thetap_final = new Array(N + 1).fill(0);
   
+  // Interior points
   for (let i = 1; i < N; i++) {
-    Wp[i] = (W[i+1] - W[i-1]) / (2 * h);
-    Thetap[i] = (Theta[i+1] - Theta[i-1]) / (2 * h);
+    Wp_final[i] = (W[i+1] - W[i-1]) / (2 * h);
+    Thetap_final[i] = (Theta[i+1] - Theta[i-1]) / (2 * h);
   }
-  Wp[0] = (W[1] - W[0]) / h;
-  Wp[N] = (W[N] - W[N-1]) / h;
-  Thetap[0] = (Theta[1] - Theta[0]) / h;
-  Thetap[N] = (Theta[N] - Theta[N-1]) / h;
   
-  // Engineering quantities
-  const Cf_lower = A1 * Wp[0];
-  const Cf_upper = A1 * Wp[N];
-  const Nu_lower = -A3 * Thetap[0];
-  const Nu_upper = -A3 * Thetap[N];
+  // Boundaries
+  Wp_final[0] = (-3 * W[0] + 4 * W[1] - W[2]) / (2 * h);
+  Thetap_final[0] = (-3 * Theta[0] + 4 * Theta[1] - Theta[2]) / (2 * h);
+  Wp_final[N] = (3 * W[N] - 4 * W[N-1] + W[N-2]) / (2 * h);
+  Thetap_final[N] = (3 * Theta[N] - 4 * Theta[N-1] + Theta[N-2]) / (2 * h);
   
-  // Entropy generation
+  // ──────────────────────────────────────────────────────────────
+  // STEP 6: Calculate engineering quantities
+  // ──────────────────────────────────────────────────────────────
+  const Cf_lower = A1 * Wp_final[0];
+  const Cf_upper = A1 * Wp_final[N];
+  const Nu_lower = Math.abs(-A3 * Thetap_final[0]);
+  const Nu_upper = Math.abs(-A3 * Thetap_final[N]);
+  
+  // ──────────────────────────────────────────────────────────────
+  // STEP 7: Calculate entropy generation
+  // ──────────────────────────────────────────────────────────────
   const Ns = [];
   const Be = [];
   const Ns_heat = [];
@@ -118,27 +226,41 @@ function solveMHDCouetteFlow(params) {
   const Ns_magnetic = [];
   
   for (let i = 0; i <= N; i++) {
-    const theta_safe = Math.max(Theta[i], 0.01);
-    const ns_h = A3 * (Thetap[i] * Thetap[i]) / (theta_safe * theta_safe);
-    const ns_f = A1 * Ec * Pr * (Wp[i] * Wp[i]) / theta_safe;
-    const ns_m = A2 * Ec * Pr * Ha * Ha * (W[i] * W[i]) / theta_safe;
-    const ns_total = ns_h + ns_f + ns_m;
+    const theta_safe = Math.max(Theta[i] + 1, 1e-6);
     
-    Ns_heat.push(ns_h);
-    Ns_fluid.push(ns_f);
-    Ns_magnetic.push(ns_m);
+    const ns_heat = A3 * Thetap_final[i] * Thetap_final[i] / (theta_safe * theta_safe);
+    const ns_fluid = A1 * Ec * Pr * Wp_final[i] * Wp_final[i] / theta_safe;
+    const ns_magnetic = A2 * Ec * Pr * Ha * Ha * W[i] * W[i] / theta_safe;
+    
+    const ns_total = ns_heat + ns_fluid + ns_magnetic;
+    const bejan = ns_heat / (ns_total + 1e-12);
+    
+    Ns_heat.push(ns_heat);
+    Ns_fluid.push(ns_fluid);
+    Ns_magnetic.push(ns_magnetic);
     Ns.push(ns_total);
-    Be.push(ns_h / (ns_total + 1e-12));
+    Be.push(Math.max(0, Math.min(1, bejan)));
   }
   
-  const avgNs = Ns.reduce((a, b) => a + b, 0) / Ns.length;
+  // Averages
+  const avgNs = Ns.reduce((sum, val) => sum + val, 0) / Ns.length;
+  const avgBe = Be.reduce((sum, val) => sum + val, 0) / Be.length;
   
+  // Max/min values
+  const maxW = Math.max(...W);
+  const minTheta = Math.min(...Theta);
+  const maxTheta = Math.max(...Theta);
+  
+  // ──────────────────────────────────────────────────────────────
+  // STEP 8: Prepare chart data
+  // ──────────────────────────────────────────────────────────────
   const chartData = eta.map((e, i) => ({
     eta: e,
     W: W[i],
     Theta: Theta[i],
-    Wp: Wp[i],
-    Thetap: Thetap[i],
+    Theta_actual: Theta[i] + 1,
+    Wp: Wp_final[i],
+    Thetap: Thetap_final[i],
     Ns: Ns[i],
     Be: Be[i],
     Ns_heat: Ns_heat[i],
@@ -146,19 +268,31 @@ function solveMHDCouetteFlow(params) {
     Ns_magnetic: Ns_magnetic[i]
   }));
   
+  // ──────────────────────────────────────────────────────────────
+  // STEP 9: Return complete solution
+  // ──────────────────────────────────────────────────────────────
   return {
-    eta, W, Theta, Wp, Thetap,
-    Cf_lower, Cf_upper, Nu_lower, Nu_upper,
-    Ns, Be, chartData, avgNs,
-    maxW: Math.max(...W),
-    minTheta: Math.min(...Theta),
-    maxTheta: Math.max(...Theta),
-avgBe: Be.reduce((a, b) => a + b, 0) / Be.length,
+    eta,
+    W,
+    Theta,
+    Wp: Wp_final,
+    Thetap: Thetap_final,
+    Cf_lower,
+    Cf_upper,
+    Nu_lower,
+    Nu_upper,
+    Ns,
+    Be,
+    chartData,
+    avgNs,
+    avgBe,
+    maxW,
+    minTheta,
+    maxTheta,
     convergenceTime: Date.now(),
     params: { ...params }
   };
 }
-
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NANOFLUID PROPERTIES CALCULATOR
