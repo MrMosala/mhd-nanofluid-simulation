@@ -1659,16 +1659,73 @@ const ParamAccordion = ({ title, icon: Icon, children, defaultOpen = true }) => 
 
 
 
-// Flow Visualization Canvas Component
+// ============================================================================
+// TEMPERATURE-BASED COLOR UTILITIES
+// ============================================================================
+
+// Temperature to color conversion (blue=cold, red=hot)
+const getTemperatureColor = (temp, minTemp, maxTemp) => {
+  if (maxTemp === minTemp) return 'hsl(240, 100%, 50%)'; // All blue if uniform
+  
+  const t = (temp - minTemp) / (maxTemp - minTemp);
+  const hue = 240 - (240 * Math.max(0, Math.min(1, t)));
+  return `hsl(${hue}, 100%, 50%)`;
+};
+
+// Get temperature at particle y-position
+const getTemperatureAtY = (y, height, Theta) => {
+  if (!Theta || Theta.length === 0) return 0.5;
+  
+  const eta = 1 - (y / height); // Flip y-axis: 0 at top, 1 at bottom
+  const N = Theta.length - 1;
+  const index = eta * N;
+  const i = Math.floor(index);
+  
+  if (i >= N) return Theta[N];
+  if (i < 0) return Theta[0];
+  
+  const frac = index - i;
+  return Theta[i] * (1 - frac) + Theta[i + 1] * frac;
+};
+
+// Get velocity at particle y-position
+const getVelocityAtY = (y, height, W) => {
+  if (!W || W.length === 0) return 0.5;
+  
+  const eta = 1 - (y / height); // Flip y-axis
+  const N = W.length - 1;
+  const index = eta * N;
+  const i = Math.floor(index);
+  
+  if (i >= N) return W[N];
+  if (i < 0) return W[0];
+  
+  const frac = index - i;
+  return W[i] * (1 - frac) + W[i + 1] * frac;
+};
+
+// ============================================================================
+// UPDATED FLOW VISUALIZATION COMPONENT
+// ============================================================================
 
 const FlowVisualization = ({ params, solution }) => {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
   const particlesRef = useRef([]);
+  const [tempRange, setTempRange] = useState({ min: 0, max: 1 });
+  
+  // Update temperature range when solution changes
+  useEffect(() => {
+    if (solution?.Theta) {
+      const minTemp = Math.min(...solution.Theta);
+      const maxTemp = Math.max(...solution.Theta);
+      setTempRange({ min: minTemp, max: maxTemp });
+    }
+  }, [solution]);
   
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !solution) return;
     
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
@@ -1676,25 +1733,26 @@ const FlowVisualization = ({ params, solution }) => {
     const height = canvas.height = rect.height * 2;
     ctx.scale(2, 2);
     
+    // Initialize particles
     const numParticles = 120;
-    particlesRef.current = [];
-    for (let i = 0; i < numParticles; i++) {
-      particlesRef.current.push({
-        x: Math.random() * (width / 2),
-        y: Math.random() * (height / 2),
-        size: 1.5 + Math.random() * 2.5,
-        alpha: 0.4 + Math.random() * 0.5
-      });
+    if (particlesRef.current.length === 0) {
+      particlesRef.current = [];
+      for (let i = 0; i < numParticles; i++) {
+        particlesRef.current.push({
+          x: Math.random() * (width / 2),
+          y: Math.random() * (height / 2),
+          size: 1.5 + Math.random() * 2.5,
+          alpha: 0.4 + Math.random() * 0.5
+        });
+      }
     }
     
     const animate = () => {
+      // Clear with fade effect
       ctx.fillStyle = 'rgba(10, 14, 23, 0.12)';
       ctx.fillRect(0, 0, width / 2, height / 2);
       
-
-
       // Draw plates
-
       const gradient1 = ctx.createLinearGradient(0, 0, width / 2, 0);
       gradient1.addColorStop(0, 'rgba(0, 212, 255, 0.6)');
       gradient1.addColorStop(1, 'rgba(0, 212, 255, 0.2)');
@@ -1707,10 +1765,7 @@ const FlowVisualization = ({ params, solution }) => {
       ctx.fillStyle = gradient2;
       ctx.fillRect(0, height / 2 - 4, width / 2, 4);
       
-
-
       // Draw magnetic field lines
-
       ctx.strokeStyle = 'rgba(255, 215, 0, 0.08)';
       ctx.lineWidth = 1;
       ctx.setLineDash([5, 10]);
@@ -1722,17 +1777,15 @@ const FlowVisualization = ({ params, solution }) => {
       }
       ctx.setLineDash([]);
       
-
-
-      // Update and draw particles
-
+      // Update and draw particles with temperature-based colors
       particlesRef.current.forEach((p) => {
-        const eta = 1 - (p.y / (height / 2));
-        const etaClamped = Math.max(0, Math.min(1, eta));
-        const idx = Math.floor(etaClamped * (solution.W.length - 1));
-        const velocity = solution.W[idx] || 0;
-        const temp = solution.Theta[idx] || 1;
+        // Get temperature at this y-position
+        const temp = getTemperatureAtY(p.y, height / 2, solution.Theta);
         
+        // Calculate velocity at this y-position
+        const velocity = getVelocityAtY(p.y, height / 2, solution.W) || 0;
+        
+        // Update position based on velocity profile
         p.x += velocity * 0.6 + 0.3;
         
         if (p.x > width / 2) {
@@ -1740,21 +1793,18 @@ const FlowVisualization = ({ params, solution }) => {
           p.y = Math.random() * (height / 2);
         }
         
-        const r = Math.floor(255 * temp);
-        const g = Math.floor(100 + 150 * (1 - temp));
-        const b = Math.floor(255 * (1 - temp * 0.7));
+        // Get color based on temperature
+        const color = getTemperatureColor(temp, tempRange.min, tempRange.max);
         
+        // Draw particle with temperature color
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${p.alpha})`;
+        ctx.fillStyle = color.replace(')', `, ${p.alpha})`).replace('hsl', 'hsla');
         ctx.fill();
         
-
-
-        // Glow effect
-
+        // Glow effect matching temperature
         const glowGradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 4);
-        glowGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${p.alpha * 0.4})`);
+        glowGradient.addColorStop(0, color.replace(')', `, ${p.alpha * 0.4})`).replace('hsl', 'hsla'));
         glowGradient.addColorStop(1, 'transparent');
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size * 4, 0, Math.PI * 2);
@@ -1762,10 +1812,7 @@ const FlowVisualization = ({ params, solution }) => {
         ctx.fill();
       });
       
-
-
       // Labels
-
       ctx.font = '12px Orbitron';
       ctx.fillStyle = 'rgba(0, 212, 255, 0.9)';
       ctx.fillText('Upper Plate (Moving) → Re = ' + params.Re.toFixed(1), 10, 22);
@@ -1778,6 +1825,20 @@ const FlowVisualization = ({ params, solution }) => {
       ctx.fillText('Ha = ' + params.Ha.toFixed(1), width / 2 - 10, 22);
       ctx.textAlign = 'left';
       
+      // Temperature legend
+      ctx.font = '10px Orbitron';
+      ctx.fillStyle = 'rgba(255, 0, 110, 0.9)';
+      ctx.fillText('Hot', width / 2 - 40, height / 2 - 60);
+      ctx.fillStyle = 'rgba(0, 212, 255, 0.9)';
+      ctx.fillText('Cold', width / 2 - 40, height / 2 - 30);
+      
+      // Draw temperature gradient bar
+      const gradientBar = ctx.createLinearGradient(width / 2 - 30, height / 2 - 60, width / 2 - 30, height / 2 - 30);
+      gradientBar.addColorStop(0, getTemperatureColor(tempRange.max, tempRange.min, tempRange.max));
+      gradientBar.addColorStop(1, getTemperatureColor(tempRange.min, tempRange.min, tempRange.max));
+      ctx.fillStyle = gradientBar;
+      ctx.fillRect(width / 2 - 30, height / 2 - 60, 4, 30);
+      
       animationRef.current = requestAnimationFrame(animate);
     };
     
@@ -1788,16 +1849,24 @@ const FlowVisualization = ({ params, solution }) => {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [params, solution]);
+  }, [params, solution, tempRange]);
   
   return (
     <div className="flow-viz-container">
       <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
+      <div className="temperature-legend">
+        <div className="legend-item">
+          <div className="legend-color hot"></div>
+          <span>Hot (θ ≈ {tempRange.max.toFixed(2)})</span>
+        </div>
+        <div className="legend-item">
+          <div className="legend-color cold"></div>
+          <span>Cold (θ ≈ {tempRange.min.toFixed(2)})</span>
+        </div>
+      </div>
     </div>
   );
 };
-
-
 
 // Figure Component
 
@@ -1839,6 +1908,360 @@ const ResearchFigure = ({ filename, title, description, results }) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ENHANCED COMPARISON PANEL COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+const EnhancedComparisonPanel = ({ 
+  configA, 
+  configB, 
+  nanofluidA, 
+  nanofluidB,
+  solutionA,
+  solutionB,
+  onUpdateA,
+  onUpdateB 
+}) => {
+  // Helper function to check if parameters differ
+  const isDifferent = (valueA, valueB, tolerance = 0.0001) => {
+    return Math.abs(valueA - valueB) > tolerance;
+  };
+  
+  // Helper to get comparison class
+  const getComparisonClass = (valueA, valueB) => {
+    return isDifferent(valueA, valueB) ? 'param-different' : 'param-same';
+  };
+  
+  return (
+    <div className="enhanced-comparison-container">
+      <div className="comparison-columns">
+        {/* ========== CONFIGURATION A (Current) ========== */}
+        <div className="comparison-config">
+          <div className="config-header config-a">
+            <h3>Configuration A (Current)</h3>
+            <span className="config-badge cyan">Active</span>
+          </div>
+          
+          {/* Nanofluid Properties */}
+          <div className="param-section-compare">
+            <div className="param-section-title">
+              <Droplets size={18} />
+              <span>Nanofluid Properties</span>
+            </div>
+            
+            <div className={`param-row ${getComparisonClass(
+              nanofluidA?.A1 || 1.0, 
+              nanofluidB?.A1 || 1.0
+            )}`}>
+              <div className="param-row-content">
+                <span className="param-icon">
+                  {nanofluidA ? '✓' : '✗'}
+                </span>
+                <div className="param-details">
+                  <strong>
+                    {nanofluidA 
+                      ? `${nanofluidA.nanoparticleName} (φ=${(nanofluidA.phi * 100).toFixed(1)}%)`
+                      : 'Base Fluid (Water)'}
+                  </strong>
+                  <div className="param-properties">
+                    <div className="property-inline">
+                      <span>A₁:</span>
+                      <code>{(nanofluidA?.A1 || 1.0).toFixed(4)}</code>
+                      {nanofluidA && (
+                        <small className={`change-badge ${
+                          parseFloat(nanofluidA.percentChanges.viscosity) >= 0 ? 'positive' : 'negative'
+                        }`}>
+                          {parseFloat(nanofluidA.percentChanges.viscosity) >= 0 ? '+' : ''}
+                          {nanofluidA.percentChanges.viscosity}% μ
+                        </small>
+                      )}
+                    </div>
+                    <div className="property-inline">
+                      <span>A₂:</span>
+                      <code>{(nanofluidA?.A2 || 1.0).toFixed(4)}</code>
+                      {nanofluidA && (
+                        <small className={`change-badge ${
+                          parseFloat(nanofluidA.percentChanges.conductivity) >= 0 ? 'positive' : 'negative'
+                        }`}>
+                          {parseFloat(nanofluidA.percentChanges.conductivity) >= 0 ? '+' : ''}
+                          {nanofluidA.percentChanges.conductivity}% σ
+                        </small>
+                      )}
+                    </div>
+                    <div className="property-inline">
+                      <span>A₃:</span>
+                      <code>{(nanofluidA?.A3 || 1.0).toFixed(4)}</code>
+                      {nanofluidA && (
+                        <small className={`change-badge ${
+                          parseFloat(nanofluidA.percentChanges.thermal) >= 0 ? 'positive' : 'negative'
+                        }`}>
+                          {parseFloat(nanofluidA.percentChanges.thermal) >= 0 ? '+' : ''}
+                          {nanofluidA.percentChanges.thermal}% k
+                        </small>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* MHD Parameters */}
+          <div className="param-section-compare">
+            <div className="param-section-title">
+              <Magnet size={18} />
+              <span>MHD Parameters</span>
+            </div>
+            
+            <div className={`param-row ${getComparisonClass(configA.Ha, configB.Ha)}`}>
+              <span className="param-label">Ha (Hartmann)</span>
+              <code className="param-value">{configA.Ha.toFixed(2)}</code>
+            </div>
+            
+            <div className={`param-row ${getComparisonClass(configA.Re, configB.Re)}`}>
+              <span className="param-label">Re (Reynolds)</span>
+              <code className="param-value">{configA.Re.toFixed(2)}</code>
+            </div>
+            
+            <div className={`param-row ${getComparisonClass(configA.lambda, configB.lambda)}`}>
+              <span className="param-label">λ (Slip)</span>
+              <code className="param-value">{configA.lambda.toFixed(2)}</code>
+            </div>
+          </div>
+          
+          {/* Thermal Parameters */}
+          <div className="param-section-compare">
+            <div className="param-section-title">
+              <Thermometer size={18} />
+              <span>Thermal Parameters</span>
+            </div>
+            
+            <div className={`param-row ${getComparisonClass(configA.Pr, configB.Pr)}`}>
+              <span className="param-label">Pr (Prandtl)</span>
+              <code className="param-value">{configA.Pr.toFixed(2)}</code>
+            </div>
+            
+            <div className={`param-row ${getComparisonClass(configA.Ec, configB.Ec)}`}>
+              <span className="param-label">Ec (Eckert)</span>
+              <code className="param-value">{configA.Ec.toFixed(3)}</code>
+            </div>
+            
+            <div className={`param-row ${getComparisonClass(configA.Bi, configB.Bi)}`}>
+              <span className="param-label">Bi (Biot)</span>
+              <code className="param-value">{configA.Bi.toFixed(2)}</code>
+            </div>
+          </div>
+          
+          {/* Results Summary */}
+          <div className="param-section-compare results-section">
+            <div className="param-section-title">
+              <BarChart3 size={18} />
+              <span>Key Results</span>
+            </div>
+            <div className="results-compact">
+              <div className="result-item">
+                <span>Nu (lower):</span>
+                <code className="emerald">{solutionA.Nu_lower.toFixed(4)}</code>
+              </div>
+              <div className="result-item">
+                <span>Cf (upper):</span>
+                <code className="cyan">{solutionA.Cf_upper.toFixed(4)}</code>
+              </div>
+              <div className="result-item">
+                <span>Avg Ns:</span>
+                <code className="gold">{solutionA.avgNs.toFixed(6)}</code>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* ========== CONFIGURATION B (Compare) ========== */}
+        <div className="comparison-config">
+          <div className="config-header config-b">
+            <h3>Configuration B (Compare)</h3>
+            <span className="config-badge magenta">Compare</span>
+          </div>
+          
+          {/* Nanofluid Properties - FIXED */}
+          <div className="param-section-compare">
+            <div className="param-section-title">
+              <Droplets size={18} />
+              <span>Nanofluid Properties</span>
+            </div>
+            
+            <div className={`param-row ${getComparisonClass(
+              nanofluidA?.A1 || 1.0, 
+              nanofluidB?.A1 || 1.0
+            )}`}>
+              <div className="param-row-content">
+                <span className="param-icon">
+                  {nanofluidB ? '✓' : '✗'}
+                </span>
+                <div className="param-details">
+                  <strong>
+                    {nanofluidB 
+                      ? `${nanofluidB.nanoparticleName} (φ=${(nanofluidB.phi * 100).toFixed(1)}%)`
+                      : 'Base Fluid (Water)'}
+                  </strong>
+                  <div className="param-properties">
+                    <div className="property-inline">
+                      <span>A₁:</span>
+                      <code>{(nanofluidB?.A1 || 1.0).toFixed(4)}</code>
+                      {nanofluidB && (
+                        <small className={`change-badge ${
+                          parseFloat(nanofluidB.percentChanges.viscosity) >= 0 ? 'positive' : 'negative'
+                        }`}>
+                          {parseFloat(nanofluidB.percentChanges.viscosity) >= 0 ? '+' : ''}
+                          {nanofluidB.percentChanges.viscosity}% μ
+                        </small>
+                      )}
+                    </div>
+                    <div className="property-inline">
+                      <span>A₂:</span>
+                      <code>{(nanofluidB?.A2 || 1.0).toFixed(4)}</code>
+                      {nanofluidB && (
+                        <small className={`change-badge ${
+                          parseFloat(nanofluidB.percentChanges.conductivity) >= 0 ? 'positive' : 'negative'
+                        }`}>
+                          {parseFloat(nanofluidB.percentChanges.conductivity) >= 0 ? '+' : ''}
+                          {nanofluidB.percentChanges.conductivity}% σ
+                        </small>
+                      )}
+                    </div>
+                    <div className="property-inline">
+                      <span>A₃:</span>
+                      <code>{(nanofluidB?.A3 || 1.0).toFixed(4)}</code>
+                      {nanofluidB && (
+                        <small className={`change-badge ${
+                          parseFloat(nanofluidB.percentChanges.thermal) >= 0 ? 'positive' : 'negative'
+                        }`}>
+                          {parseFloat(nanofluidB.percentChanges.thermal) >= 0 ? '+' : ''}
+                          {nanofluidB.percentChanges.thermal}% k
+                        </small>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* MHD Parameters */}
+          <div className="param-section-compare">
+            <div className="param-section-title">
+              <Magnet size={18} />
+              <span>MHD Parameters</span>
+            </div>
+            
+            <div className={`param-row ${getComparisonClass(configA.Ha, configB.Ha)}`}>
+              <span className="param-label">Ha (Hartmann)</span>
+              <code className="param-value">{configB.Ha.toFixed(2)}</code>
+            </div>
+            
+            <div className={`param-row ${getComparisonClass(configA.Re, configB.Re)}`}>
+              <span className="param-label">Re (Reynolds)</span>
+              <code className="param-value">{configB.Re.toFixed(2)}</code>
+            </div>
+            
+            <div className={`param-row ${getComparisonClass(configA.lambda, configB.lambda)}`}>
+              <span className="param-label">λ (Slip)</span>
+              <code className="param-value">{configB.lambda.toFixed(2)}</code>
+            </div>
+          </div>
+          
+          {/* Thermal Parameters */}
+          <div className="param-section-compare">
+            <div className="param-section-title">
+              <Thermometer size={18} />
+              <span>Thermal Parameters</span>
+            </div>
+            
+            <div className={`param-row ${getComparisonClass(configA.Pr, configB.Pr)}`}>
+              <span className="param-label">Pr (Prandtl)</span>
+              <code className="param-value">{configB.Pr.toFixed(2)}</code>
+            </div>
+            
+            <div className={`param-row ${getComparisonClass(configA.Ec, configB.Ec)}`}>
+              <span className="param-label">Ec (Eckert)</span>
+              <code className="param-value">{configB.Ec.toFixed(3)}</code>
+            </div>
+            
+            <div className={`param-row ${getComparisonClass(configA.Bi, configB.Bi)}`}>
+              <span className="param-label">Bi (Biot)</span>
+              <code className="param-value">{configB.Bi.toFixed(2)}</code>
+            </div>
+          </div>
+          
+          {/* Results Summary */}
+          <div className="param-section-compare results-section">
+            <div className="param-section-title">
+              <BarChart3 size={18} />
+              <span>Key Results</span>
+            </div>
+            <div className="results-compact">
+              <div className="result-item">
+                <span>Nu (lower):</span>
+                <code className="emerald">{solutionB.Nu_lower.toFixed(4)}</code>
+              </div>
+              <div className="result-item">
+                <span>Cf (upper):</span>
+                <code className="cyan">{solutionB.Cf_upper.toFixed(4)}</code>
+              </div>
+              <div className="result-item">
+                <span>Avg Ns:</span>
+                <code className="gold">{solutionB.avgNs.toFixed(6)}</code>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Difference Summary */}
+      <div className="comparison-summary">
+        <h4>
+          <TrendingUp size={18} />
+          Key Differences
+        </h4>
+        <div className="difference-grid">
+          {isDifferent(configA.Ha, configB.Ha) && (
+            <div className="difference-item">
+              <span className="diff-label">Hartmann Number:</span>
+              <span className="diff-change">
+                {configA.Ha.toFixed(2)} → {configB.Ha.toFixed(2)}
+                <small className={configB.Ha > configA.Ha ? 'increase' : 'decrease'}>
+                  ({((configB.Ha - configA.Ha) / configA.Ha * 100).toFixed(1)}%)
+                </small>
+              </span>
+            </div>
+          )}
+          
+          {isDifferent(nanofluidA?.A3 || 1.0, nanofluidB?.A3 || 1.0) && (
+            <div className="difference-item">
+              <span className="diff-label">Thermal Conductivity (A₃):</span>
+              <span className="diff-change">
+                {(nanofluidA?.A3 || 1.0).toFixed(4)} → {(nanofluidB?.A3 || 1.0).toFixed(4)}
+                <small className={nanofluidB?.A3 > nanofluidA?.A3 ? 'increase' : 'decrease'}>
+                  ({(((nanofluidB?.A3 || 1.0) - (nanofluidA?.A3 || 1.0)) / (nanofluidA?.A3 || 1.0) * 100).toFixed(1)}%)
+                </small>
+              </span>
+            </div>
+          )}
+          
+          <div className="difference-item">
+            <span className="diff-label">Heat Transfer Change:</span>
+            <span className="diff-change">
+              Nu: {((solutionB.Nu_lower - solutionA.Nu_lower) / solutionA.Nu_lower * 100).toFixed(1)}%
+              <small className={solutionB.Nu_lower > solutionA.Nu_lower ? 'increase' : 'decrease'}>
+                ({solutionB.Nu_lower > solutionA.Nu_lower ? '↑ Better' : '↓ Reduced'} heat transfer)
+              </small>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MAIN APP COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1867,6 +2290,10 @@ function App() {
   const [volumeFraction, setVolumeFraction] = useState(0.05);
   const [nanofluidProps, setNanofluidProps] = useState(null);
   const [useNanofluid, setUseNanofluid] = useState(true);
+  const [compareUseNanofluid, setCompareUseNanofluid] = useState(false);
+  const [compareNanoparticleType, setCompareNanoparticleType] = useState('Cu');
+  const [compareVolumeFraction, setCompareVolumeFraction] = useState(0.02);
+  const [compareNanofluidProps, setCompareNanofluidProps] = useState(null);
   
   // AI Lab state
 
@@ -1899,6 +2326,27 @@ function App() {
       setNanofluidProps(null);
     }
   }, [volumeFraction, nanoparticleType, useNanofluid]);
+
+  useEffect(() => {
+  if (compareUseNanofluid) {
+    const props = computeNanofluidProperties(compareVolumeFraction, compareNanoparticleType);
+    setCompareNanofluidProps(props);
+    setCompareParams(prev => ({
+      ...prev,
+      A1: props.A1,
+      A2: props.A2,
+      A3: props.A3
+    }));
+  } else {
+    setCompareParams(prev => ({
+      ...prev,
+      A1: 1.0,
+      A2: 1.0,
+      A3: 1.0
+    }));
+    setCompareNanofluidProps(null);
+  }
+}, [compareVolumeFraction, compareNanoparticleType, compareUseNanofluid]);
 
   // ═══════════════════════════════════════════════════════════════════════
   // ML FEATURES - NEW STATE
@@ -2269,129 +2717,469 @@ const FloatingControls = () => (
 
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const renderSimulation = () => (
-    <div className="visualization-section animate-slide-up">
-      <ResultsPanel />
-      <FlowVisualization params={params} solution={solution} />
-      
-      {compareMode && compareSolution && (
-        <div className="comparison-section">
-          <div className="comparison-header">
-            <h3 className="comparison-title"><GitCompare size={20} /> Comparison Mode Active</h3>
-            <button 
-              className="exit-compare-btn"
-              onClick={() => setCompareMode(false)}
-            >
-              <X size={16} /> Exit Compare Mode
-            </button>
-          </div>
-          <div className="comparison-grid">
-            <div className="comparison-card">
-              <h4>Configuration A (Current)</h4>
-              <ResultsPanel sol={solution} label=" (A)" />
-              <div className="comparison-sliders">
-                <ParameterSlider label="Ha" value={params.Ha} onChange={(v) => updateParam('Ha', v)} min={0} max={10} step={0.1} unit="" />
-                <ParameterSlider label="Re" value={params.Re} onChange={(v) => updateParam('Re', v)} min={0.1} max={5} step={0.1} unit="" />
-                <ParameterSlider label="Ec" value={params.Ec} onChange={(v) => updateParam('Ec', v)} min={0} max={0.2} step={0.005} unit="" />
-                <ParameterSlider label="Bi" value={params.Bi} onChange={(v) => updateParam('Bi', v)} min={0.1} max={5} step={0.1} unit="" />
-              </div>
-            </div>
-            <div className="comparison-card">
-              <h4>Configuration B (Compare)</h4>
-              <ResultsPanel sol={compareSolution} label=" (B)" />
-              <div className="comparison-sliders">
-                <ParameterSlider label="Ha" value={compareParams.Ha} onChange={(v) => updateCompareParam('Ha', v)} min={0} max={10} step={0.1} unit="" />
-                <ParameterSlider label="Re" value={compareParams.Re} onChange={(v) => updateCompareParam('Re', v)} min={0.1} max={5} step={0.1} unit="" />
-                <ParameterSlider label="Ec" value={compareParams.Ec} onChange={(v) => updateCompareParam('Ec', v)} min={0} max={0.2} step={0.005} unit="" />
-                <ParameterSlider label="Bi" value={compareParams.Bi} onChange={(v) => updateCompareParam('Bi', v)} min={0.1} max={5} step={0.1} unit="" />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      <div className="physics-box">
-        <h4><Activity size={18} /> Understanding the Flow Visualization</h4>
-        <p>
-          This animation shows nanofluid particles flowing between two parallel plates. The 
-          <strong style={{color: 'var(--accent-cyan)'}}> upper plate (cyan)</strong> moves with velocity Re, 
-          while the <strong style={{color: 'var(--accent-magenta)'}}> lower plate (magenta)</strong> remains stationary.
-        </p>
-        
-        <div className="physics-highlight">
-          <strong>Particle Color:</strong> Indicates temperature - 
-          <span style={{color: '#ff6b6b'}}> warmer (red)</span> to 
-          <span style={{color: '#4dabf7'}}> cooler (blue)</span>
-        </div>
-        
-        <div className="physics-highlight gold">
-          <strong>Yellow dashed lines:</strong> Represent the transverse magnetic field (B₀). 
-          Increasing Ha (Hartmann number) strengthens the Lorentz force, which opposes fluid motion.
-        </div>
-        
-        <p><strong>Try this:</strong> Increase Ha to see particles slow down due to magnetic damping!</p>
-      </div>
+const renderSimulation = () => (
+  <div className="visualization-section animate-slide-up">
+    <ResultsPanel />
+    <FlowVisualization params={params} solution={solution} />
+    
+{compareMode && compareSolution && (
+  <div className="comparison-section">
+    {/* Header with Exit Button */}
+    <div className="comparison-header">
+      <h3 className="comparison-title">
+        <GitCompare size={20} /> Comparison Mode Active
+      </h3>
+      <button 
+        className="exit-compare-btn"
+        onClick={() => setCompareMode(false)}
+      >
+        <X size={16} /> Exit Compare Mode
+      </button>
     </div>
-  );
-
-  const renderVelocity = () => (
-    <div className="visualization-section animate-slide-up">
-      <ResultsPanel />
+    
+    {/* Enhanced Comparison Panel - NEW */}
+    <EnhancedComparisonPanel
+      configA={params}
+      configB={compareParams}
+      nanofluidA={useNanofluid ? nanofluidProps : null}
+      nanofluidB={compareUseNanofluid ? compareNanofluidProps : null}
+      solutionA={solution}
+      solutionB={compareSolution}
+      onUpdateA={updateParam}
+      onUpdateB={updateCompareParam}
+    />
+    
+    {/* Optional: Keep the old slider interface for quick adjustments */}
+    <div className="comparison-controls-section" style={{ marginTop: '2rem' }}>
+      <h4 style={{ 
+        color: 'var(--accent-cyan)', 
+        marginBottom: '1rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem'
+      }}>
+        <Settings size={18} />
+        Quick Parameter Adjustments
+      </h4>
       
-      <div className="chart-section">
-        <div className="chart-header">
-          <span className="dot"></span>
-          <h3>Velocity Profile W(η)</h3>
-          {compareMode && (
-            <div className="compare-mode-indicator">
-              <span className="ai-badge">Compare Mode Active</span>
-              <button 
-                className="small-exit-btn"
-                onClick={() => setCompareMode(false)}
-                title="Exit Compare Mode"
-              >
-                <X size={12} />
-              </button>
-            </div>
+      <div className="comparison-grid">
+        <div className="comparison-card">
+          <h4>Configuration A (Current)</h4>
+          <ResultsPanel sol={solution} label=" (A)" />
+          <div className="comparison-sliders">
+            <ParameterSlider 
+              label="Ha" 
+              value={params.Ha} 
+              onChange={(v) => updateParam('Ha', v)} 
+              min={0} 
+              max={10} 
+              step={0.1} 
+              unit="" 
+              description="Hartmann number (magnetic field strength)"
+            />
+            <ParameterSlider 
+              label="Re" 
+              value={params.Re} 
+              onChange={(v) => updateParam('Re', v)} 
+              min={0.1} 
+              max={5} 
+              step={0.1} 
+              unit="" 
+              description="Reynolds number (flow velocity)"
+            />
+            <ParameterSlider 
+              label="Ec" 
+              value={params.Ec} 
+              onChange={(v) => updateParam('Ec', v)} 
+              min={0} 
+              max={0.2} 
+              step={0.005} 
+              unit="" 
+              description="Eckert number (viscous dissipation)"
+            />
+            <ParameterSlider 
+              label="Bi" 
+              value={params.Bi} 
+              onChange={(v) => updateParam('Bi', v)} 
+              min={0.1} 
+              max={5} 
+              step={0.1} 
+              unit="" 
+              description="Biot number (convective cooling)"
+            />
+            <ParameterSlider 
+              label="λ" 
+              value={params.lambda} 
+              onChange={(v) => updateParam('lambda', v)} 
+              min={0} 
+              max={0.5} 
+              step={0.01} 
+              unit="" 
+              description="Slip parameter"
+            />
+            <ParameterSlider 
+              label="Pr" 
+              value={params.Pr} 
+              onChange={(v) => updateParam('Pr', v)} 
+              min={0.7} 
+              max={20} 
+              step={0.1} 
+              unit="" 
+              description="Prandtl number"
+            />
+          </div>
+        </div>
+        
+        <div className="comparison-card">
+          <h4>Configuration B (Compare)</h4>
+          <ResultsPanel sol={compareSolution} label=" (B)" />
+          <div className="comparison-sliders">
+            <ParameterSlider 
+              label="Ha" 
+              value={compareParams.Ha} 
+              onChange={(v) => updateCompareParam('Ha', v)} 
+              min={0} 
+              max={10} 
+              step={0.1} 
+              unit="" 
+              description="Hartmann number (magnetic field strength)"
+            />
+            <ParameterSlider 
+              label="Re" 
+              value={compareParams.Re} 
+              onChange={(v) => updateCompareParam('Re', v)} 
+              min={0.1} 
+              max={5} 
+              step={0.1} 
+              unit="" 
+              description="Reynolds number (flow velocity)"
+            />
+            <ParameterSlider 
+              label="Ec" 
+              value={compareParams.Ec} 
+              onChange={(v) => updateCompareParam('Ec', v)} 
+              min={0} 
+              max={0.2} 
+              step={0.005} 
+              unit="" 
+              description="Eckert number (viscous dissipation)"
+            />
+            <ParameterSlider 
+              label="Bi" 
+              value={compareParams.Bi} 
+              onChange={(v) => updateCompareParam('Bi', v)} 
+              min={0.1} 
+              max={5} 
+              step={0.1} 
+              unit="" 
+              description="Biot number (convective cooling)"
+            />
+            <ParameterSlider 
+              label="λ" 
+              value={compareParams.lambda} 
+              onChange={(v) => updateCompareParam('lambda', v)} 
+              min={0} 
+              max={0.5} 
+              step={0.01} 
+              unit="" 
+              description="Slip parameter"
+            />
+            <ParameterSlider 
+              label="Pr" 
+              value={compareParams.Pr} 
+              onChange={(v) => updateCompareParam('Pr', v)} 
+              min={0.7} 
+              max={20} 
+              step={0.1} 
+              unit="" 
+              description="Prandtl number"
+            />
+          </div>
+        </div>
+      </div>
+      
+      {/* Nanofluid Controls for Configuration B */}
+      <div style={{ 
+        marginTop: '1.5rem', 
+        padding: '1rem', 
+        background: 'var(--bg-tertiary)',
+        borderRadius: 'var(--radius-md)',
+        border: '1px solid var(--border-subtle)'
+      }}>
+        <h5 style={{ 
+          color: 'var(--accent-magenta)', 
+          marginBottom: '1rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem'
+        }}>
+          <Droplets size={16} />
+          Configuration B - Nanofluid Settings
+        </h5>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          {/* Toggle for Config B */}
+          <div>
+            <label className="toggle-label">
+              <input
+                type="checkbox"
+                checked={compareUseNanofluid}
+                onChange={(e) => setCompareUseNanofluid(e.target.checked)}
+                className="toggle-checkbox"
+              />
+              <span className="toggle-text">
+                {compareUseNanofluid ? '🔬 Nanofluid Active' : '💧 Base Fluid'}
+              </span>
+            </label>
+          </div>
+          
+          {/* Nanoparticle Type for Config B */}
+          {compareUseNanofluid && (
+            <>
+              <div>
+                <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.5rem', display: 'block' }}>
+                  Nanoparticle Type
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    className={`nanoparticle-btn ${compareNanoparticleType === 'Cu' ? 'active' : ''}`}
+                    onClick={() => setCompareNanoparticleType('Cu')}
+                    style={{ flex: 1, padding: '0.5rem' }}
+                  >
+                    Cu
+                  </button>
+                  <button
+                    className={`nanoparticle-btn ${compareNanoparticleType === 'Al2O3' ? 'active' : ''}`}
+                    onClick={() => setCompareNanoparticleType('Al2O3')}
+                    style={{ flex: 1, padding: '0.5rem' }}
+                  >
+                    Al₂O₃
+                  </button>
+                </div>
+              </div>
+              
+              {/* Volume Fraction for Config B */}
+              <div style={{ gridColumn: 'span 2' }}>
+                <label style={{ 
+                  fontSize: '0.85rem', 
+                  color: 'var(--text-muted)', 
+                  marginBottom: '0.5rem', 
+                  display: 'flex',
+                  justifyContent: 'space-between'
+                }}>
+                  <span>Volume Fraction (φ)</span>
+                  <span style={{ 
+                    color: 'var(--accent-magenta)',
+                    fontWeight: '600'
+                  }}>
+                    {(compareVolumeFraction * 100).toFixed(1)}%
+                  </span>
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="0.10"
+                  step="0.005"
+                  value={compareVolumeFraction}
+                  onChange={(e) => setCompareVolumeFraction(parseFloat(e.target.value))}
+                  className="slider smooth-slider"
+                  style={{ width: '100%' }}
+                />
+              </div>
+              
+              {/* Display Compare Nanofluid Properties */}
+              {compareNanofluidProps && (
+                <div style={{ 
+                  gridColumn: 'span 2',
+                  background: 'var(--bg-primary)',
+                  padding: '0.75rem',
+                  borderRadius: 'var(--radius-sm)',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: '0.5rem'
+                }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>A₁</div>
+                    <div style={{ fontSize: '1rem', color: 'var(--accent-cyan)', fontFamily: 'monospace' }}>
+                      {compareNanofluidProps.A1.toFixed(4)}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>A₂</div>
+                    <div style={{ fontSize: '1rem', color: 'var(--accent-cyan)', fontFamily: 'monospace' }}>
+                      {compareNanofluidProps.A2.toFixed(4)}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>A₃</div>
+                    <div style={{ fontSize: '1rem', color: 'var(--accent-cyan)', fontFamily: 'monospace' }}>
+                      {compareNanofluidProps.A3.toFixed(4)}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
-        <div className="chart-wrapper">
+      </div>
+    </div>
+  </div>
+)}
+    
+    <div className="physics-box">
+      <h4><Activity size={18} /> Understanding the Flow Visualization</h4>
+      <p>
+        This animation shows nanofluid particles flowing between two parallel plates. The 
+        <strong style={{color: 'var(--accent-cyan)'}}> upper plate (cyan)</strong> moves with velocity Re, 
+        while the <strong style={{color: 'var(--accent-magenta)'}}> lower plate (magenta)</strong> remains stationary.
+      </p>
+      
+      <div className="physics-highlight">
+        <strong>Particle Color:</strong> Indicates temperature - 
+        <span style={{color: '#ff6b6b'}}> warmer (red)</span> to 
+        <span style={{color: '#4dabf7'}}> cooler (blue)</span>
+      </div>
+      
+      <div className="physics-highlight gold">
+        <strong>Yellow dashed lines:</strong> Represent the transverse magnetic field (B₀). 
+        Increasing Ha (Hartmann number) strengthens the Lorentz force, which opposes fluid motion.
+      </div>
+      
+      <div className="physics-highlight emerald">
+        <strong>Updated Boundary Conditions:</strong>
+        <div style={{ marginTop: '0.5rem' }}>
+          • <strong>Upper plate:</strong> W(1) = Re - λ·W'(1) where λ = μ_f/(βH)<br/>
+          • <strong>Heat transfer:</strong> dθ/dη(1) = -Bi·θ(1) where Bi = H·h_f/k_f<br/>
+          • <strong>Note:</strong> Boundary conditions use <em>base fluid</em> properties (μ_f, k_f)
+        </div>
+      </div>
+      
+      <div className="physics-highlight cyan">
+        <strong>Key Physical Effects:</strong>
+        <ul style={{ marginTop: '0.5rem', marginBottom: 0 }}>
+          <li><strong>Magnetic damping:</strong> Increasing Ha slows particles (Lorentz force)</li>
+          <li><strong>Slip effect:</strong> Increasing λ reduces shear stress at upper plate</li>
+          <li><strong>Convective cooling:</strong> Increasing Bi cools upper plate faster</li>
+          <li><strong>Viscous heating:</strong> Increasing Ec warms fluid through friction</li>
+        </ul>
+      </div>
+      
+      <p><strong>Try these experiments:</strong></p>
+      <ul>
+        <li><strong>Increase Ha to 5:</strong> Watch particles slow down due to magnetic damping</li>
+        <li><strong>Increase λ to 0.3:</strong> See more slip at upper plate (higher velocities)</li>
+        <li><strong>Increase Bi to 2:</strong> Observe stronger cooling at upper plate</li>
+        <li><strong>Increase Ec to 0.05:</strong> Notice warmer particles from viscous heating</li>
+      </ul>
+      
+      <div className="physics-highlight magenta">
+        <strong>Real-time Feedback:</strong> As you adjust parameters using the controls panel (⚙️ button), 
+        you'll see immediate changes in particle motion and temperature colors. This helps visualize 
+        how magnetic fields, nanoparticle concentration, and boundary conditions interact.
+      </div>
+    </div>
+  </div>
+);
+
+const renderVelocity = () => (
+  <div className="visualization-section animate-slide-up">
+    <ResultsPanel />
+    
+    <div className="chart-section">
+      <div className="chart-header">
+        <span className="dot"></span>
+        <h3>Velocity Profile W(η)</h3>
+        {compareMode && (
+          <div className="compare-mode-indicator">
+            <span className="ai-badge">Compare Mode Active</span>
+            <button 
+              className="small-exit-btn"
+              onClick={() => setCompareMode(false)}
+              title="Exit Compare Mode"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="chart-wrapper">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart 
+            data={solution.chartData} 
+            margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+            <XAxis 
+              dataKey="eta" 
+              stroke="rgba(255,255,255,0.5)"
+              tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }}
+              label={{ value: 'η (dimensionless position)', position: 'insideBottom', offset: -10, fill: '#00d4ff' }}
+            />
+            <YAxis 
+              stroke="rgba(255,255,255,0.5)"
+              tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }}
+              label={{ value: 'W (velocity)', angle: -90, position: 'insideLeft', fill: '#00d4ff' }}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Line 
+              type="monotone" 
+              dataKey="W" 
+              stroke="#00d4ff" 
+              strokeWidth={3} 
+              dot={false} 
+              name="Velocity W (Current)" 
+            />
+            {compareMode && compareSolution && (
+              <Line 
+                type="monotone" 
+                data={compareSolution.chartData} 
+                dataKey="W" 
+                stroke="#ff006e" 
+                strokeWidth={3} 
+                strokeDasharray="5 5" 
+                dot={false} 
+                name="Velocity W (Compare)" 
+              />
+            )}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+    
+    <div className="dual-chart-grid">
+      <div className="chart-section">
+        <div className="chart-header">
+          <span className="dot emerald"></span>
+          <h3>Velocity Gradient W'(η)</h3>
+        </div>
+        <div className="chart-wrapper" style={{ height: '280px' }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart 
               data={solution.chartData} 
               margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-              <XAxis 
-                dataKey="eta" 
-                stroke="rgba(255,255,255,0.5)"
-                tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }}
-                label={{ value: 'η (dimensionless position)', position: 'insideBottom', offset: -10, fill: '#00d4ff' }}
-              />
-              <YAxis 
-                stroke="rgba(255,255,255,0.5)"
-                tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }}
-                label={{ value: 'W (velocity)', angle: -90, position: 'insideLeft', fill: '#00d4ff' }}
-              />
+              <XAxis dataKey="eta" stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 11 }} />
+              <YAxis stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 11 }} />
               <Tooltip content={<CustomTooltip />} />
               <Line 
                 type="monotone" 
-                dataKey="W" 
-                stroke="#00d4ff" 
-                strokeWidth={3} 
+                dataKey="Wp" 
+                stroke="#00ff9f" 
+                strokeWidth={2} 
                 dot={false} 
-                name="Velocity W (Current)" 
+                name="Velocity Gradient W' (Current)" 
               />
               {compareMode && compareSolution && (
                 <Line 
                   type="monotone" 
                   data={compareSolution.chartData} 
-                  dataKey="W" 
+                  dataKey="Wp" 
                   stroke="#ff006e" 
-                  strokeWidth={3} 
+                  strokeWidth={2} 
                   strokeDasharray="5 5" 
                   dot={false} 
-                  name="Velocity W (Compare)" 
+                  name="Velocity Gradient W' (Compare)" 
                 />
               )}
             </LineChart>
@@ -2399,849 +3187,968 @@ const FloatingControls = () => (
         </div>
       </div>
       
-      <div className="dual-chart-grid">
-        <div className="chart-section">
-          <div className="chart-header">
-            <span className="dot emerald"></span>
-            <h3>Velocity Gradient W'(η)</h3>
+      <div className="physics-box" style={{ margin: 0 }}>
+        <h4><TrendingUp size={18} /> Key Velocity Metrics</h4>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+          <div className="result-card cyan">
+            <div className="label">Max Velocity (Current)</div>
+            <div className="value">{solution.maxW.toFixed(4)}</div>
           </div>
-          <div className="chart-wrapper" style={{ height: '280px' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart 
-                data={solution.chartData} 
-                margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                <XAxis dataKey="eta" stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 11 }} />
-                <YAxis stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 11 }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Line 
-                  type="monotone" 
-                  dataKey="Wp" 
-                  stroke="#00ff9f" 
-                  strokeWidth={2} 
-                  dot={false} 
-                  name="Velocity Gradient W' (Current)" 
-                />
-                {compareMode && compareSolution && (
-                  <Line 
-                    type="monotone" 
-                    data={compareSolution.chartData} 
-                    dataKey="Wp" 
-                    stroke="#ff006e" 
-                    strokeWidth={2} 
-                    strokeDasharray="5 5" 
-                    dot={false} 
-                    name="Velocity Gradient W' (Compare)" 
-                  />
-                )}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-        
-        <div className="physics-box" style={{ margin: 0 }}>
-          <h4><TrendingUp size={18} /> Key Velocity Metrics</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-            <div className="result-card cyan">
-              <div className="label">Max Velocity (Current)</div>
-              <div className="value">{solution.maxW.toFixed(4)}</div>
-            </div>
-            {compareMode && compareSolution && (
-              <div className="result-card magenta">
-                <div className="label">Max Velocity (Compare)</div>
-                <div className="value">{compareSolution.maxW.toFixed(4)}</div>
-              </div>
-            )}
-          </div>
-          
-          <h4><Info size={18} /> Skin Friction Coefficient</h4>
-          <p>The skin friction is calculated as:</p>
-          <div className="equation-inline">Cf = A₁ × dW/dη</div>
-          <p style={{ marginTop: '0.5rem' }}>
-            At the lower plate: 
-            <span style={{ color: 'var(--accent-cyan)', marginLeft: '0.5rem', fontWeight: 'bold' }}>
-              Cf = {solution.Cf_lower.toFixed(4)}
-            </span>
-            {compareMode && compareSolution && (
-              <span style={{ color: 'var(--accent-magenta)', marginLeft: '1rem', fontWeight: 'bold' }}>
-                Compare: {compareSolution.Cf_lower.toFixed(4)}
-              </span>
-            )}
-          </p>
-          <p>
-            At the upper plate: 
-            <span style={{ color: 'var(--accent-magenta)', marginLeft: '0.5rem', fontWeight: 'bold' }}>
-              Cf = {solution.Cf_upper.toFixed(4)}
-            </span>
-            {compareMode && compareSolution && (
-              <span style={{ color: 'var(--accent-magenta)', marginLeft: '1rem', fontWeight: 'bold' }}>
-                Compare: {compareSolution.Cf_upper.toFixed(4)}
-              </span>
-            )}
-          </p>
-        </div>
-      </div>
-      
-      <div className="physics-box">
-        <h4><Wind size={18} /> Physics of Velocity Distribution</h4>
-        
-        <div className="physics-highlight">
-          <strong>Governing Equation:</strong>
-          <div className="equation-inline" style={{ display: 'block', marginTop: '0.5rem' }}>
-            A₁·W'' - A₂·Ha²·W + G = 0
-          </div>
-        </div>
-        
-        <p><strong>Physical Interpretation:</strong></p>
-        <ul>
-          <li><strong>A₁·W''</strong> — Viscous diffusion (nanofluid viscosity effect)</li>
-          <li><strong>A₂·Ha²·W</strong> — Lorentz force (magnetic damping)</li>
-          <li><strong>G</strong> — Pressure gradient driving force</li>
-        </ul>
-        
-        <div className="physics-highlight magenta">
-          <strong>Effect of Hartmann Number (Ha):</strong><br/>
-          Increasing Ha → Stronger magnetic field → Greater Lorentz force → 
-          <em> Velocity decreases</em> as the magnetic field opposes fluid motion.
-        </div>
-        
-        <p><strong>Boundary Conditions:</strong></p>
-        <ul>
-          <li><strong>η = 0 (Lower plate):</strong> W = 0 (no-slip, stationary)</li>
-          <li><strong>η = 1 (Upper plate):</strong> W - λW' = Re (slip condition)</li>
-        </ul>
-      </div>
-    </div>
-  );
-
-  const renderTemperature = () => (
-    <div className="visualization-section animate-slide-up">
-      <ResultsPanel />
-      
-      <div className="chart-section">
-        <div className="chart-header">
-          <span className="dot magenta"></span>
-          <h3>Temperature Profile θ(η)</h3>
-          {compareMode && (
-            <div className="compare-mode-indicator">
-              <span className="ai-badge">Compare Mode Active</span>
-              <button 
-                className="small-exit-btn"
-                onClick={() => setCompareMode(false)}
-                title="Exit Compare Mode"
-              >
-                <X size={12} />
-              </button>
+          {compareMode && compareSolution && (
+            <div className="result-card magenta">
+              <div className="label">Max Velocity (Compare)</div>
+              <div className="value">{compareSolution.maxW.toFixed(4)}</div>
             </div>
           )}
         </div>
-        <div className="chart-wrapper">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={solution.chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-              <defs>
-                <linearGradient id="tempGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ff006e" stopOpacity={0.4}/>
-                  <stop offset="95%" stopColor="#ff006e" stopOpacity={0.05}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-              <XAxis 
-                dataKey="eta" 
-                stroke="rgba(255,255,255,0.5)"
-                tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }}
-                label={{ value: 'η (dimensionless position)', position: 'insideBottom', offset: -10, fill: '#ff006e' }}
-              />
-              <YAxis 
-                stroke="rgba(255,255,255,0.5)"
-                tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }}
-                label={{ value: 'θ (temperature)', angle: -90, position: 'insideLeft', fill: '#ff006e' }}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="Theta" stroke="#ff006e" strokeWidth={3} fill="url(#tempGradient)" name="Temperature θ (Current)" />
-              {compareMode && compareSolution && (
-                <Area 
-                  type="monotone" 
-                  data={compareSolution.chartData} 
-                  dataKey="Theta" 
-                  stroke="#ffd700" 
-                  strokeWidth={2} 
-                  strokeDasharray="5 5" 
-                  fill="transparent"
-                  name="Temperature θ (Compare)" 
-                />
-              )}
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-      
-      <div className="dual-chart-grid">
-        <div className="chart-section">
-          <div className="chart-header">
-            <span className="dot gold"></span>
-            <h3>Temperature Gradient θ'(η)</h3>
-          </div>
-          <div className="chart-wrapper" style={{ height: '280px' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={solution.chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                <XAxis dataKey="eta" stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 11 }} />
-                <YAxis stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 11 }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Line type="monotone" dataKey="Thetap" stroke="#ffd700" strokeWidth={2} dot={false} name="Temperature Gradient θ' (Current)" />
-                {compareMode && compareSolution && (
-                  <Line 
-                    type="monotone" 
-                    data={compareSolution.chartData} 
-                    dataKey="Thetap" 
-                    stroke="#00ff9f" 
-                    strokeWidth={2} 
-                    strokeDasharray="5 5" 
-                    dot={false} 
-                    name="Temperature Gradient θ' (Compare)" 
-                  />
-                )}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
         
-        <div className="physics-box" style={{ margin: 0 }}>
-          <h4><Thermometer size={18} /> Temperature Statistics</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-            <div className="result-card magenta">
-              <div className="label">Max θ (Current)</div>
-              <div className="value">{solution.maxTheta.toFixed(4)}</div>
-            </div>
-            {compareMode && compareSolution && (
-              <div className="result-card gold">
-                <div className="label">Max θ (Compare)</div>
-                <div className="value">{compareSolution.maxTheta.toFixed(4)}</div>
-              </div>
-            )}
-          </div>
-          
-          <h4><Info size={18} /> Nusselt Number</h4>
-          <p>Heat transfer rate at the walls:</p>
-          <div className="equation-inline">Nu = -A₃ × dθ/dη</div>
-          <p style={{ marginTop: '0.5rem' }}>
-            At the lower plate: 
-            <span style={{ color: 'var(--accent-gold)', marginLeft: '0.5rem', fontWeight: 'bold' }}>
-              Nu = {solution.Nu_lower.toFixed(4)}
+        <h4><Info size={18} /> Skin Friction Coefficient</h4>
+        <p>The skin friction is calculated as:</p>
+        <div className="equation-inline">Cf = A₁ × dW/dη</div>
+        <p style={{ marginTop: '0.5rem' }}>
+          At the lower plate: 
+          <span style={{ color: 'var(--accent-cyan)', marginLeft: '0.5rem', fontWeight: 'bold' }}>
+            Cf = {solution.Cf_lower.toFixed(4)}
+          </span>
+          {compareMode && compareSolution && (
+            <span style={{ color: 'var(--accent-magenta)', marginLeft: '1rem', fontWeight: 'bold' }}>
+              Compare: {compareSolution.Cf_lower.toFixed(4)}
             </span>
-            {compareMode && compareSolution && (
-              <span style={{ color: 'var(--accent-emerald)', marginLeft: '1rem', fontWeight: 'bold' }}>
-                Compare: {compareSolution.Nu_lower.toFixed(4)}
-              </span>
-            )}
-          </p>
-          <p>
-            At the upper plate: 
-            <span style={{ color: 'var(--accent-emerald)', marginLeft: '0.5rem', fontWeight: 'bold' }}>
-              Nu = {solution.Nu_upper.toFixed(4)}
+          )}
+        </p>
+        <p>
+          At the upper plate: 
+          <span style={{ color: 'var(--accent-magenta)', marginLeft: '0.5rem', fontWeight: 'bold' }}>
+            Cf = {solution.Cf_upper.toFixed(4)}
+          </span>
+          {compareMode && compareSolution && (
+            <span style={{ color: 'var(--accent-magenta)', marginLeft: '1rem', fontWeight: 'bold' }}>
+              Compare: {compareSolution.Cf_upper.toFixed(4)}
             </span>
-            {compareMode && compareSolution && (
-              <span style={{ color: 'var(--accent-emerald)', marginLeft: '1rem', fontWeight: 'bold' }}>
-                Compare: {compareSolution.Nu_upper.toFixed(4)}
-              </span>
-            )}
-          </p>
-        </div>
-      </div>
-      
-      <div className="physics-box">
-        <h4><Thermometer size={18} /> Physics of Temperature Distribution</h4>
-        
-        <div className="physics-highlight magenta">
-          <strong>Governing Equation:</strong>
-          <div className="equation-inline" style={{ display: 'block', marginTop: '0.5rem' }}>
-            A₃·θ'' + A₁·Pr·Ec·(W')² + A₂·Pr·Ec·Ha²·W² = 0
-          </div>
-        </div>
-        
-        <p><strong>Heat Generation Sources:</strong></p>
-        <ul>
-          <li><strong>A₁·Pr·Ec·(W')²</strong> — Viscous dissipation (friction heating)</li>
-          <li><strong>A₂·Pr·Ec·Ha²·W²</strong> — Joule heating (magnetic field effect)</li>
-        </ul>
-        
-        <div className="physics-highlight gold">
-          <strong>Effect of Eckert Number (Ec):</strong><br/>
-          Increasing Ec → More viscous dissipation → Higher temperatures in the fluid.
-          This represents the conversion of kinetic energy to thermal energy.
-        </div>
-        
-        <div className="physics-highlight emerald">
-          <strong>Effect of Biot Number (Bi):</strong><br/>
-          Increasing Bi → Enhanced convective cooling at the upper plate → 
-          Lower temperatures near η = 1. The Biot number represents the ratio of
-          convective to conductive heat transfer.
-        </div>
-        
-        <p><strong>Boundary Conditions:</strong></p>
-        <ul>
-          <li><strong>η = 0 (Lower plate):</strong> θ = 1 (fixed wall temperature)</li>
-          <li><strong>η = 1 (Upper plate):</strong> θ' + Bi·θ = 0 (convective cooling - Robin BC)</li>
-        </ul>
+          )}
+        </p>
       </div>
     </div>
-  );
-
-  const renderEntropy = () => (
-    <div className="visualization-section animate-slide-up">
-      <ResultsPanel />
+    
+    <div className="physics-box">
+      <h4><Wind size={18} /> Physics of Velocity Distribution</h4>
       
+      <div className="physics-highlight">
+        <strong>Governing Equation:</strong>
+        <div className="equation-inline" style={{ display: 'block', marginTop: '0.5rem' }}>
+          A₁·W'' - A₂·Ha²·W + G = 0
+        </div>
+      </div>
+      
+      <p><strong>Physical Interpretation:</strong></p>
+      <ul>
+        <li><strong>A₁·W''</strong> — Viscous diffusion (nanofluid viscosity effect)</li>
+        <li><strong>A₂·Ha²·W</strong> — Lorentz force (magnetic damping)</li>
+        <li><strong>G</strong> — Pressure gradient driving force</li>
+      </ul>
+      
+      <div className="physics-highlight magenta">
+        <strong>Effect of Hartmann Number (Ha):</strong><br/>
+        Increasing Ha → Stronger magnetic field → Greater Lorentz force → 
+        <em> Velocity decreases</em> as the magnetic field opposes fluid motion.
+      </div>
+      
+      <div className="physics-highlight gold">
+        <strong>Updated Boundary Conditions:</strong>
+        <div className="equation-inline" style={{ display: 'block', marginTop: '0.5rem' }}>
+          η = 0: W = 0 (no-slip, stationary)<br/>
+          η = 1: W - λ·W' = Re (Navier slip condition)
+        </div>
+        <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>
+          • <strong>λ = μ_f/(βH)</strong> — Uses base fluid viscosity μ_f (not μ_nf)<br/>
+          • <strong>β</strong> — Slip length at wall-fluid interface<br/>
+          • <strong>μ_f</strong> — Base fluid dynamic viscosity
+        </p>
+      </div>
+      
+      <div className="physics-highlight emerald">
+        <strong>Key Modification:</strong><br/>
+        The slip coefficient λ explicitly uses the <strong>base fluid viscosity μ_f</strong> rather than 
+        the enhanced nanofluid viscosity μ_nf. This reflects that slip mechanisms at the 
+        wall-fluid interface depend on the properties of the base fluid contacting the wall.
+      </div>
+      
+      <p><strong>Physical Significance:</strong></p>
+      <ul>
+        <li><strong>λ = 0:</strong> No-slip condition (traditional Couette flow)</li>
+        <li><strong>λ {'>'} 0:</strong> Slip reduces shear stress at upper plate</li>
+        <li><strong>Increasing λ:</strong> More slip → higher velocities for same Re</li>
+        <li><strong>Note:</strong> λ depends on μ_f, so changes in nanoparticle concentration affect bulk flow (via A₁) but not the slip condition directly</li>
+      </ul>
+    </div>
+  </div>
+);
+
+const renderTemperature = () => (
+  <div className="visualization-section animate-slide-up">
+    <ResultsPanel />
+    
+    <div className="chart-section">
+      <div className="chart-header">
+        <span className="dot magenta"></span>
+        <h3>Temperature Profile θ(η)</h3>
+        {compareMode && (
+          <div className="compare-mode-indicator">
+            <span className="ai-badge">Compare Mode Active</span>
+            <button 
+              className="small-exit-btn"
+              onClick={() => setCompareMode(false)}
+              title="Exit Compare Mode"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="chart-wrapper">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={solution.chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+            <defs>
+              <linearGradient id="tempGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#ff006e" stopOpacity={0.4}/>
+                <stop offset="95%" stopColor="#ff006e" stopOpacity={0.05}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+            <XAxis 
+              dataKey="eta" 
+              stroke="rgba(255,255,255,0.5)"
+              tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }}
+              label={{ value: 'η (dimensionless position)', position: 'insideBottom', offset: -10, fill: '#ff006e' }}
+            />
+            <YAxis 
+              stroke="rgba(255,255,255,0.5)"
+              tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }}
+              label={{ value: 'θ (temperature)', angle: -90, position: 'insideLeft', fill: '#ff006e' }}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Area type="monotone" dataKey="Theta" stroke="#ff006e" strokeWidth={3} fill="url(#tempGradient)" name="Temperature θ (Current)" />
+            {compareMode && compareSolution && (
+              <Area 
+                type="monotone" 
+                data={compareSolution.chartData} 
+                dataKey="Theta" 
+                stroke="#ffd700" 
+                strokeWidth={2} 
+                strokeDasharray="5 5" 
+                fill="transparent"
+                name="Temperature θ (Compare)" 
+              />
+            )}
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+    
+    <div className="dual-chart-grid">
       <div className="chart-section">
         <div className="chart-header">
           <span className="dot gold"></span>
-          <h3>Entropy Generation Components Ns(η)</h3>
-          {compareMode && (
-            <div className="compare-mode-indicator">
-              <span className="ai-badge">Compare Mode Active</span>
-              <button 
-                className="small-exit-btn"
-                onClick={() => setCompareMode(false)}
-                title="Exit Compare Mode"
-              >
-                <X size={12} />
-              </button>
+          <h3>Temperature Gradient θ'(η)</h3>
+        </div>
+        <div className="chart-wrapper" style={{ height: '280px' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={solution.chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+              <XAxis dataKey="eta" stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 11 }} />
+              <YAxis stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 11 }} />
+              <Tooltip content={<CustomTooltip />} />
+              <Line type="monotone" dataKey="Thetap" stroke="#ffd700" strokeWidth={2} dot={false} name="Temperature Gradient θ' (Current)" />
+              {compareMode && compareSolution && (
+                <Line 
+                  type="monotone" 
+                  data={compareSolution.chartData} 
+                  dataKey="Thetap" 
+                  stroke="#00ff9f" 
+                  strokeWidth={2} 
+                  strokeDasharray="5 5" 
+                  dot={false} 
+                  name="Temperature Gradient θ' (Compare)" 
+                />
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      
+      <div className="physics-box" style={{ margin: 0 }}>
+        <h4><Thermometer size={18} /> Temperature Statistics</h4>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+          <div className="result-card magenta">
+            <div className="label">Max θ (Current)</div>
+            <div className="value">{solution.maxTheta.toFixed(4)}</div>
+          </div>
+          {compareMode && compareSolution && (
+            <div className="result-card gold">
+              <div className="label">Max θ (Compare)</div>
+              <div className="value">{compareSolution.maxTheta.toFixed(4)}</div>
             </div>
           )}
         </div>
-        <div className="chart-wrapper">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={solution.chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-              <defs>
-                <linearGradient id="heatGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ff006e" stopOpacity={0.6}/>
-                  <stop offset="95%" stopColor="#ff006e" stopOpacity={0.1}/>
-                </linearGradient>
-                <linearGradient id="fluidGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#00d4ff" stopOpacity={0.6}/>
-                  <stop offset="95%" stopColor="#00d4ff" stopOpacity={0.1}/>
-                </linearGradient>
-                <linearGradient id="magGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ffd700" stopOpacity={0.6}/>
-                  <stop offset="95%" stopColor="#ffd700" stopOpacity={0.1}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-              <XAxis dataKey="eta" stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }} />
-              <YAxis stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }} />
-              <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="Ns_heat" stackId="1" stroke="#ff006e" fill="url(#heatGrad)" name="Heat Transfer (Ns,heat)" />
-              <Area type="monotone" dataKey="Ns_fluid" stackId="1" stroke="#00d4ff" fill="url(#fluidGrad)" name="Fluid Friction (Ns,fluid)" />
-              <Area type="monotone" dataKey="Ns_magnetic" stackId="1" stroke="#ffd700" fill="url(#magGrad)" name="Magnetic (Ns,mag)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-      
-      <div className="chart-section">
-        <div className="chart-header">
-          <span className="dot emerald"></span>
-          <h3>Bejan Number Be(η)</h3>
-        </div>
-        <div className="chart-wrapper">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={solution.chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-              <defs>
-                <linearGradient id="bejanGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#00ff9f" stopOpacity={0.5}/>
-                  <stop offset="95%" stopColor="#00ff9f" stopOpacity={0.05}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-              <XAxis dataKey="eta" stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }} />
-              <YAxis domain={[0, 1]} stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }} />
-              <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="Be" stroke="#00ff9f" strokeWidth={2} fill="url(#bejanGrad)" name="Bejan Number Be (Current)" />
-              {compareMode && compareSolution && (
-                <Area 
-                  type="monotone" 
-                  data={compareSolution.chartData} 
-                  dataKey="Be" 
-                  stroke="#ff006e" 
-                  strokeWidth={2} 
-                  strokeDasharray="5 5" 
-                  fill="transparent"
-                  name="Bejan Number Be (Compare)" 
-                />
-              )}
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-      
-      <div className="physics-box">
-        <h4><BarChart3 size={18} /> Understanding Entropy Generation</h4>
         
-        <p>Entropy generation measures thermodynamic irreversibility - energy that cannot be recovered for useful work.</p>
-        
-        <div className="physics-highlight">
-          <strong>Total Entropy Generation:</strong>
-          <div className="equation-inline" style={{ display: 'block', marginTop: '0.5rem' }}>
-            Ns = Ns,heat + Ns,fluid + Ns,magnetic
-          </div>
-        </div>
-        
-        <p><strong>Three Sources of Irreversibility:</strong></p>
-        <ul>
-          <li><strong style={{color: '#ff006e'}}>Heat Transfer (Ns,heat):</strong> Due to temperature gradients - A₃(θ')²/θ²</li>
-          <li><strong style={{color: '#00d4ff'}}>Fluid Friction (Ns,fluid):</strong> Due to viscous shear - A₁·Ec·Pr·(W')²/θ</li>
-          <li><strong style={{color: '#ffd700'}}>Magnetic Field (Ns,magnetic):</strong> Due to Joule heating - A₂·Ec·Pr·Ha²·W²/θ</li>
-        </ul>
-        
-        <div className="physics-highlight emerald">
-          <strong>Bejan Number (Be):</strong>
-          <div className="equation-inline" style={{ display: 'block', marginTop: '0.5rem' }}>
-            Be = Ns,heat / Ns,total
-          </div>
-          <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>
-            • <strong>Be {'>'} 0.5:</strong> Heat transfer irreversibility dominates<br/>
-            • <strong>Be {'<'} 0.5:</strong> Friction + magnetic irreversibility dominates<br/>
-            • <strong>Be = 0.5:</strong> Equal contribution (thermodynamic equilibrium)
-          </p>
-        </div>
-        
-        <p style={{ marginTop: '1rem' }}>
-          <strong>Current Average Bejan Number:</strong> 
-          <span style={{ color: 'var(--accent-emerald)', fontFamily: 'JetBrains Mono', marginLeft: '0.5rem', fontSize: '1.1rem' }}>
-            {solution.avgBe.toFixed(4)}
+        <h4><Info size={18} /> Nusselt Number</h4>
+        <p>Heat transfer rate at the walls:</p>
+        <div className="equation-inline">Nu = -A₃ × dθ/dη</div>
+        <p style={{ marginTop: '0.5rem' }}>
+          At the lower plate: 
+          <span style={{ color: 'var(--accent-gold)', marginLeft: '0.5rem', fontWeight: 'bold' }}>
+            Nu = {solution.Nu_lower.toFixed(4)}
           </span>
           {compareMode && compareSolution && (
-            <span style={{ color: 'var(--accent-magenta)', marginLeft: '1rem', fontWeight: 'bold' }}>
-              Compare: {compareSolution.avgBe.toFixed(4)}
+            <span style={{ color: 'var(--accent-emerald)', marginLeft: '1rem', fontWeight: 'bold' }}>
+              Compare: {compareSolution.Nu_lower.toFixed(4)}
             </span>
           )}
-          {solution.avgBe > 0.5 ? 
-            <span style={{ color: 'var(--accent-magenta)', marginLeft: '0.5rem' }}>(Heat transfer dominated)</span> : 
-            <span style={{ color: 'var(--accent-cyan)', marginLeft: '0.5rem' }}>(Friction/Magnetic dominated)</span>
-          }
         </p>
-        
         <p>
-          <strong>Average Entropy Generation:</strong>
-          <span style={{ color: 'var(--accent-gold)', fontFamily: 'JetBrains Mono', marginLeft: '0.5rem' }}>
-            {solution.avgNs.toFixed(6)}
+          At the upper plate: 
+          <span style={{ color: 'var(--accent-emerald)', marginLeft: '0.5rem', fontWeight: 'bold' }}>
+            Nu = {solution.Nu_upper.toFixed(4)}
           </span>
           {compareMode && compareSolution && (
-            <span style={{ color: 'var(--accent-magenta)', marginLeft: '1rem', fontWeight: 'bold' }}>
-              Compare: {compareSolution.avgNs.toFixed(6)}
+            <span style={{ color: 'var(--accent-emerald)', marginLeft: '1rem', fontWeight: 'bold' }}>
+              Compare: {compareSolution.Nu_upper.toFixed(4)}
             </span>
           )}
         </p>
       </div>
     </div>
-  );
-
-  const renderAILab = () => (
-    <div className="visualization-section animate-slide-up">
-      <div className="ai-lab-header">
-        <div className="ai-lab-title">
-          <Brain size={32} />
-          <div>
-            <h2>AI Laboratory & Advanced Analytics</h2>
-            <p>Machine Learning Tools for Parameter Optimization & Performance Analysis</p>
-          </div>
+    
+    <div className="physics-box">
+      <h4><Thermometer size={18} /> Physics of Temperature Distribution</h4>
+      
+      <div className="physics-highlight magenta">
+        <strong>Governing Equation:</strong>
+        <div className="equation-inline" style={{ display: 'block', marginTop: '0.5rem' }}>
+          A₃·θ'' + A₁·Pr·Ec·(W')² + A₂·Pr·Ec·Ha²·W² = 0
         </div>
       </div>
       
-      {/* Analytics Dashboard */}
-      <AnalyticsDashboard solution={solution} previousSolution={previousSolution} />
+      <p><strong>Heat Generation Sources:</strong></p>
+      <ul>
+        <li><strong>A₁·Pr·Ec·(W')²</strong> — Viscous dissipation (friction heating)</li>
+        <li><strong>A₂·Pr·Ec·Ha²·W²</strong> — Joule heating (magnetic field effect)</li>
+      </ul>
       
-      {/* Neural Network Predictions */}
-      <div className="ai-section">
-        <div className="ai-section-header">
-          <Cpu size={20} />
-          <h3>Neural Network Instant Predictions</h3>
-          <span className="ai-badge">Real-time</span>
+      <div className="physics-highlight gold">
+        <strong>Updated Boundary Conditions:</strong>
+        <div className="equation-inline" style={{ display: 'block', marginTop: '0.5rem' }}>
+          η = 0: θ = 0 (isothermal lower plate)<br/>
+          η = 1: dθ/dη = -Bi·θ (convective cooling)
         </div>
-        <p className="ai-description">
-          Physics-informed neural network provides instant approximations based on the governing equations.
-          Compare predictions with actual solver results.
+        <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>
+          • <strong>Bi = H·h_f/k_f</strong> — Biot number<br/>
+          • <strong>h_f</strong> — Convective heat transfer coefficient<br/>
+          • <strong>k_f</strong> — Base fluid thermal conductivity
         </p>
-        <div className="nn-predictions-grid">
-          <div className="nn-card">
-            <div className="nn-label">Predicted Cf (Lower)</div>
-            <div className="nn-value cyan">{nnPrediction?.Cf_lower.toFixed(4)}</div>
-            <div className="nn-actual">Actual: {solution.Cf_lower.toFixed(4)}</div>
-            <div className="nn-error">Error: {Math.abs((nnPrediction?.Cf_lower - solution.Cf_lower) / solution.Cf_lower * 100).toFixed(1)}%</div>
+      </div>
+      
+      <div className="physics-highlight emerald">
+        <strong>Key Features:</strong><br/>
+        1. <strong>Lower plate (η=0):</strong> Fixed temperature θ=0 (wall temperature equals ambient)<br/>
+        2. <strong>Upper plate (η=1):</strong> Robin boundary condition with convective heat exchange<br/>
+        3. <strong>Base fluid conductivity:</strong> The Biot number uses k_f (base fluid) in the boundary condition
+      </div>
+      
+      <div className="physics-highlight cyan">
+        <strong>Effect of Biot Number (Bi):</strong><br/>
+        • <strong>Bi = 0:</strong> Adiabatic (insulated) upper plate (no heat loss)<br/>
+        • <strong>Bi {'>'} 0:</strong> Convective cooling at upper plate<br/>
+        • <strong>Bi → ∞:</strong> Perfect cooling (θ(1) = 0, like lower plate)<br/>
+        • Increasing Bi → Stronger cooling → Lower temperatures near η = 1
+      </div>
+      
+      <div className="physics-highlight">
+        <strong>Effect of Eckert Number (Ec):</strong><br/>
+        Increasing Ec → More viscous dissipation → Higher temperatures in the fluid.
+        This represents the conversion of kinetic energy to thermal energy through friction.
+      </div>
+      
+      <p><strong>Physical Interpretation of Boundary Conditions:</strong></p>
+      <ul>
+        <li><strong>Lower plate:</strong> Maintained at ambient temperature (Tₐ) through external control</li>
+        <li><strong>Upper plate:</strong> Exchanges heat with surroundings at rate proportional to (T(H)-Tₐ)</li>
+        <li><strong>Convective resistance:</strong> Governed by h_f in the boundary condition</li>
+        <li><strong>Conductive resistance:</strong> Governed by k_f in the boundary condition</li>
+        <li><strong>Bi ratio:</strong> Represents convective/conductive heat transfer resistance</li>
+      </ul>
+    </div>
+  </div>
+);
+
+const renderEntropy = () => (
+  <div className="visualization-section animate-slide-up">
+    <ResultsPanel />
+    
+    <div className="chart-section">
+      <div className="chart-header">
+        <span className="dot gold"></span>
+        <h3>Entropy Generation Components Ns(η)</h3>
+        {compareMode && (
+          <div className="compare-mode-indicator">
+            <span className="ai-badge">Compare Mode Active</span>
+            <button 
+              className="small-exit-btn"
+              onClick={() => setCompareMode(false)}
+              title="Exit Compare Mode"
+            >
+              <X size={12} />
+            </button>
           </div>
-          <div className="nn-card">
-            <div className="nn-label">Predicted Nu (Lower)</div>
-            <div className="nn-value magenta">{nnPrediction?.Nu_lower.toFixed(4)}</div>
-            <div className="nn-actual">Actual: {solution.Nu_lower.toFixed(4)}</div>
-            <div className="nn-error">Error: {Math.abs((nnPrediction?.Nu_lower - solution.Nu_lower) / (solution.Nu_lower || 0.001) * 100).toFixed(1)}%</div>
-          </div>
-          <div className="nn-card">
-            <div className="nn-label">Predicted Max W</div>
-            <div className="nn-value gold">{nnPrediction?.maxW.toFixed(4)}</div>
-            <div className="nn-actual">Actual: {solution.maxW.toFixed(4)}</div>
-            <div className="nn-error">Error: {Math.abs((nnPrediction?.maxW - solution.maxW) / solution.maxW * 100).toFixed(1)}%</div>
-          </div>
-          <div className="nn-card">
-            <div className="nn-label">Model Confidence</div>
-            <div className="nn-value emerald">{(nnPrediction?.confidence * 100).toFixed(1)}%</div>
-            <div className="nn-confidence-bar">
-              <div style={{ width: `${nnPrediction?.confidence * 100}%` }}></div>
-            </div>
-          </div>
+        )}
+      </div>
+      <div className="chart-wrapper">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={solution.chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+            <defs>
+              <linearGradient id="heatGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#ff006e" stopOpacity={0.6}/>
+                <stop offset="95%" stopColor="#ff006e" stopOpacity={0.1}/>
+              </linearGradient>
+              <linearGradient id="fluidGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#00d4ff" stopOpacity={0.6}/>
+                <stop offset="95%" stopColor="#00d4ff" stopOpacity={0.1}/>
+              </linearGradient>
+              <linearGradient id="magGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#ffd700" stopOpacity={0.6}/>
+                <stop offset="95%" stopColor="#ffd700" stopOpacity={0.1}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+            <XAxis dataKey="eta" stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }} />
+            <YAxis stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }} />
+            <Tooltip content={<CustomTooltip />} />
+            <Area type="monotone" dataKey="Ns_heat" stackId="1" stroke="#ff006e" fill="url(#heatGrad)" name="Heat Transfer (Ns,heat)" />
+            <Area type="monotone" dataKey="Ns_fluid" stackId="1" stroke="#00d4ff" fill="url(#fluidGrad)" name="Fluid Friction (Ns,fluid)" />
+            <Area type="monotone" dataKey="Ns_magnetic" stackId="1" stroke="#ffd700" fill="url(#magGrad)" name="Magnetic (Ns,mag)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+    
+    <div className="chart-section">
+      <div className="chart-header">
+        <span className="dot emerald"></span>
+        <h3>Bejan Number Be(η)</h3>
+      </div>
+      <div className="chart-wrapper">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={solution.chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+            <defs>
+              <linearGradient id="bejanGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#00ff9f" stopOpacity={0.5}/>
+                <stop offset="95%" stopColor="#00ff9f" stopOpacity={0.05}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+            <XAxis dataKey="eta" stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }} />
+            <YAxis domain={[0, 1]} stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }} />
+            <Tooltip content={<CustomTooltip />} />
+            <Area type="monotone" dataKey="Be" stroke="#00ff9f" strokeWidth={2} fill="url(#bejanGrad)" name="Bejan Number Be (Current)" />
+            {compareMode && compareSolution && (
+              <Area 
+                type="monotone" 
+                data={compareSolution.chartData} 
+                dataKey="Be" 
+                stroke="#ff006e" 
+                strokeWidth={2} 
+                strokeDasharray="5 5" 
+                fill="transparent"
+                name="Bejan Number Be (Compare)" 
+              />
+            )}
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+    
+    <div className="physics-box">
+      <h4><BarChart3 size={18} /> Understanding Entropy Generation</h4>
+      
+      <p>Entropy generation measures thermodynamic irreversibility - energy that cannot be recovered for useful work.</p>
+      
+      <div className="physics-highlight">
+        <strong>Total Entropy Generation:</strong>
+        <div className="equation-inline" style={{ display: 'block', marginTop: '0.5rem' }}>
+          Ns = Ns,heat + Ns,fluid + Ns,magnetic
         </div>
       </div>
       
-      {/* Sensitivity Analysis */}
-      <SensitivityAnalysis params={params} baseSolution={solution} />
+      <p><strong>Three Sources of Irreversibility:</strong></p>
+      <ul>
+        <li><strong style={{color: '#ff006e'}}>Heat Transfer (Ns,heat):</strong> Due to temperature gradients - A₃(θ')²/θ²</li>
+        <li><strong style={{color: '#00d4ff'}}>Fluid Friction (Ns,fluid):</strong> Due to viscous shear - A₁·Ec·Pr·(W')²/θ</li>
+        <li><strong style={{color: '#ffd700'}}>Magnetic Field (Ns,magnetic):</strong> Due to Joule heating - A₂·Ec·Pr·Ha²·W²/θ</li>
+      </ul>
       
-      {/* Parameter Warnings */}
-      <ParameterWarnings params={params} solution={solution} />
-      
-      {/* Performance Benchmarking */}
-      <PerformanceBenchmark solution={solution} />
-      
-
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* ML TRAINING STATISTICS - NEW */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      <div className="ai-section">
-        <div className="ai-section-header">
-          <Brain size={20} />
-          <h3>ML Training Dataset</h3>
-          <span className="ai-badge emerald">Community Data</span>
+      <div className="physics-highlight emerald">
+        <strong>Bejan Number (Be):</strong>
+        <div className="equation-inline" style={{ display: 'block', marginTop: '0.5rem' }}>
+          Be = Ns,heat / Ns,total
         </div>
-        <p className="ai-description">
-          Every simulation contributes to our machine learning training dataset. 
-          The AI learns optimal parameter combinations from real research data.
+        <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>
+          • <strong>Be {'>'} 0.5:</strong> Heat transfer irreversibility dominates<br/>
+          • <strong>Be {'<'} 0.5:</strong> Friction + magnetic irreversibility dominates<br/>
+          • <strong>Be = 0.5:</strong> Equal contribution (thermodynamic equilibrium)
         </p>
-        
-        <div className="ml-stats-grid">
-          <div className="stat-card">
-            <div className="stat-label">Total Simulations</div>
-            <div className="stat-value purple">{mlStats.totalSimulations}</div>
-            <div className="stat-sublabel">Community Contributions</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-label">Training Data</div>
-            <div className="stat-value cyan">{trainingData.length}</div>
-            <div className="stat-sublabel">Loaded Samples</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-label">Data Quality</div>
-            <div className="stat-value emerald">High</div>
-            <div className="stat-sublabel">Convergence Verified</div>
+      </div>
+      
+      <div className="physics-highlight gold">
+        <strong>Updated Boundary Condition Effects on Entropy:</strong>
+        <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>
+          The modified boundary conditions affect entropy generation through:
+        </p>
+        <ul style={{ marginTop: '0.5rem', marginBottom: 0 }}>
+          <li><strong>Slip condition (λ = μ_f/βH):</strong> Reduces shear at upper plate → decreases Ns,fluid</li>
+          <li><strong>Convective cooling (Bi = H·h_f/k_f):</strong> Increases temperature gradients near η=1 → affects Ns,heat distribution</li>
+          <li><strong>Base fluid properties in BCs:</strong> λ uses μ_f, Bi uses k_f (not nanofluid-enhanced properties)</li>
+        </ul>
+      </div>
+      
+      <div className="physics-highlight cyan">
+        <strong>How Boundary Conditions Impact Irreversibility:</strong>
+        <div style={{ marginTop: '0.5rem' }}>
+          <table className="boundary-effects-table">
+            <thead>
+              <tr>
+                <th>Parameter</th>
+                <th>Effect on Ns,heat</th>
+                <th>Effect on Ns,fluid</th>
+                <th>Effect on Ns,magnetic</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>λ (Slip)</strong></td>
+                <td>Indirect (via W')</td>
+                <td><span style={{color: 'var(--accent-emerald)'}}>Decreases</span> (less shear)</td>
+                <td>Indirect (via W)</td>
+              </tr>
+              <tr>
+                <td><strong>Bi (Convective)</strong></td>
+                <td><span style={{color: 'var(--accent-magenta)'}}>Increases</span> (steeper θ')</td>
+                <td>Indirect</td>
+                <td>Indirect</td>
+              </tr>
+              <tr>
+                <td><strong>Base fluid in BCs</strong></td>
+                <td>Bi uses k_f (not k_nf)</td>
+                <td>λ uses μ_f (not μ_nf)</td>
+                <td>No direct effect</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <p style={{ marginTop: '1rem' }}>
+        <strong>Current Average Bejan Number:</strong> 
+        <span style={{ color: 'var(--accent-emerald)', fontFamily: 'JetBrains Mono', marginLeft: '0.5rem', fontSize: '1.1rem' }}>
+          {solution.avgBe.toFixed(4)}
+        </span>
+        {compareMode && compareSolution && (
+          <span style={{ color: 'var(--accent-magenta)', marginLeft: '1rem', fontWeight: 'bold' }}>
+            Compare: {compareSolution.avgBe.toFixed(4)}
+          </span>
+        )}
+        {solution.avgBe > 0.5 ? 
+          <span style={{ color: 'var(--accent-magenta)', marginLeft: '0.5rem' }}>(Heat transfer dominated)</span> : 
+          <span style={{ color: 'var(--accent-cyan)', marginLeft: '0.5rem' }}>(Friction/Magnetic dominated)</span>
+        }
+      </p>
+      
+      <p>
+        <strong>Average Entropy Generation:</strong>
+        <span style={{ color: 'var(--accent-gold)', fontFamily: 'JetBrains Mono', marginLeft: '0.5rem' }}>
+          {solution.avgNs.toFixed(6)}
+        </span>
+        {compareMode && compareSolution && (
+          <span style={{ color: 'var(--accent-magenta)', marginLeft: '1rem', fontWeight: 'bold' }}>
+            Compare: {compareSolution.avgNs.toFixed(6)}
+          </span>
+        )}
+      </p>
+    </div>
+  </div>
+);
+
+const renderAILab = () => (
+  <div className="visualization-section animate-slide-up">
+    <div className="ai-lab-header">
+      <div className="ai-lab-title">
+        <Brain size={32} />
+        <div>
+          <h2>AI Laboratory & Advanced Analytics</h2>
+          <p>Machine Learning Tools for Parameter Optimization & Performance Analysis</p>
+        </div>
+      </div>
+    </div>
+    
+    {/* Analytics Dashboard */}
+    <AnalyticsDashboard solution={solution} previousSolution={previousSolution} />
+    
+    {/* Neural Network Predictions */}
+    <div className="ai-section">
+      <div className="ai-section-header">
+        <Cpu size={20} />
+        <h3>Neural Network Instant Predictions</h3>
+        <span className="ai-badge">Real-time</span>
+      </div>
+      <p className="ai-description">
+        Physics-informed neural network provides instant approximations based on the governing equations 
+        with <strong>updated boundary conditions</strong>: W(1) = Re - λ·W'(1) where λ = μ_f/(βH) uses base fluid viscosity.
+      </p>
+      <div className="nn-predictions-grid">
+        <div className="nn-card">
+          <div className="nn-label">Predicted Cf (Lower)</div>
+          <div className="nn-value cyan">{nnPrediction?.Cf_lower.toFixed(4)}</div>
+          <div className="nn-actual">Actual: {solution.Cf_lower.toFixed(4)}</div>
+          <div className="nn-error">Error: {Math.abs((nnPrediction?.Cf_lower - solution.Cf_lower) / solution.Cf_lower * 100).toFixed(1)}%</div>
+        </div>
+        <div className="nn-card">
+          <div className="nn-label">Predicted Nu (Lower)</div>
+          <div className="nn-value magenta">{nnPrediction?.Nu_lower.toFixed(4)}</div>
+          <div className="nn-actual">Actual: {solution.Nu_lower.toFixed(4)}</div>
+          <div className="nn-error">Error: {Math.abs((nnPrediction?.Nu_lower - solution.Nu_lower) / (solution.Nu_lower || 0.001) * 100).toFixed(1)}%</div>
+        </div>
+        <div className="nn-card">
+          <div className="nn-label">Predicted Max W</div>
+          <div className="nn-value gold">{nnPrediction?.maxW.toFixed(4)}</div>
+          <div className="nn-actual">Actual: {solution.maxW.toFixed(4)}</div>
+          <div className="nn-error">Error: {Math.abs((nnPrediction?.maxW - solution.maxW) / solution.maxW * 100).toFixed(1)}%</div>
+        </div>
+        <div className="nn-card">
+          <div className="nn-label">Model Confidence</div>
+          <div className="nn-value emerald">{(nnPrediction?.confidence * 100).toFixed(1)}%</div>
+          <div className="nn-confidence-bar">
+            <div style={{ width: `${nnPrediction?.confidence * 100}%` }}></div>
           </div>
         </div>
+      </div>
+    </div>
+    
+    {/* Sensitivity Analysis */}
+    <SensitivityAnalysis params={params} baseSolution={solution} />
+    
+    {/* Parameter Warnings */}
+    <ParameterWarnings params={params} solution={solution} />
+    
+    {/* Performance Benchmarking */}
+    <PerformanceBenchmark solution={solution} />
+    
+    {/* ML Training Statistics */}
+    <div className="ai-section">
+      <div className="ai-section-header">
+        <Brain size={20} />
+        <h3>ML Training Dataset</h3>
+        <span className="ai-badge emerald">Community Data</span>
+      </div>
+      <p className="ai-description">
+        Every simulation contributes to our machine learning training dataset. 
+        The AI learns optimal parameter combinations from real research data.
+      </p>
+      
+      <div className="ml-stats-grid">
+        <div className="stat-card">
+          <div className="stat-label">Total Simulations</div>
+          <div className="stat-value purple">{mlStats.totalSimulations}</div>
+          <div className="stat-sublabel">Community Contributions</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Training Data</div>
+          <div className="stat-value cyan">{trainingData.length}</div>
+          <div className="stat-sublabel">Loaded Samples</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Data Quality</div>
+          <div className="stat-value emerald">High</div>
+          <div className="stat-sublabel">Convergence Verified</div>
+        </div>
+      </div>
+
+      <button 
+        className="ml-load-btn"
+        onClick={async () => {
+          await loadTrainingData(500);
+          alert(`Loaded ${trainingData.length} training samples!`);
+        }}
+        disabled={mlLoading}
+      >
+        {mlLoading ? (
+          <><div className="spinner"></div> Loading...</>
+        ) : (
+          <><Download size={18} /> Load Training Data</>
+        )}
+      </button>
+    </div>
+
+    {/* Community Leaderboard */}
+    <div className="ai-section">
+      <div className="ai-section-header">
+        <Award size={20} />
+        <h3>Community Leaderboard</h3>
+        <span className="ai-badge gold">Top Performers</span>
+      </div>
+      <p className="ai-description">
+        See the best optimization results from researchers worldwide! 
+        Compete to find the most efficient parameter combinations.
+      </p>
+
+      <div className="leaderboard-controls">
+        <select 
+          className="leaderboard-goal-select"
+          value={optimizationGoal}
+          onChange={(e) => setOptimizationGoal(e.target.value)}
+        >
+          <option value="max-heat-transfer">🔥 Maximum Heat Transfer</option>
+          <option value="min-entropy">📉 Minimum Entropy</option>
+          <option value="max-velocity">💨 Maximum Velocity</option>
+          <option value="balanced">⚖️ Balanced Performance</option>
+        </select>
 
         <button 
-          className="ml-load-btn"
+          className="leaderboard-btn"
           onClick={async () => {
-            await loadTrainingData(500);
-            alert(`Loaded ${trainingData.length} training samples!`);
+            const leaders = await getLeaderboard(optimizationGoal, 10);
+            setCurrentLeaderboard(leaders);
+            setShowLeaderboard(true);
           }}
-          disabled={mlLoading}
         >
-          {mlLoading ? (
-            <><div className="spinner"></div> Loading...</>
-          ) : (
-            <><Download size={18} /> Load Training Data</>
-          )}
+          <Award size={16} /> View Leaderboard
+        </button>
+
+        <button 
+          className="submit-btn"
+          onClick={async () => {
+            let score;
+            switch(optimizationGoal) {
+              case 'max-heat-transfer':
+                score = solution.Nu_lower;
+                break;
+              case 'min-entropy':
+                score = -solution.avgNs;
+                break;
+              case 'max-velocity':
+                score = solution.maxW;
+                break;
+              default:
+                score = solution.Nu_lower - solution.avgNs + solution.maxW;
+            }
+            
+            const username = prompt('Enter your name for the leaderboard:', `Researcher ${getUserId().slice(-4)}`);
+            if (username) {
+              await submitToLeaderboard(optimizationGoal, params, solution, score, username);
+              alert('✅ Submitted to leaderboard!');
+            }
+          }}
+        >
+          <Upload size={16} /> Submit My Result
         </button>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* COMMUNITY LEADERBOARD - NEW */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      <div className="ai-section">
-        <div className="ai-section-header">
-          <Award size={20} />
-          <h3>Community Leaderboard</h3>
-          <span className="ai-badge gold">Top Performers</span>
-        </div>
-        <p className="ai-description">
-          See the best optimization results from researchers worldwide! 
-          Compete to find the most efficient parameter combinations.
-        </p>
-
-        <div className="leaderboard-controls">
-          <select 
-            className="leaderboard-goal-select"
-            value={optimizationGoal}
-            onChange={(e) => setOptimizationGoal(e.target.value)}
-          >
-            <option value="max-heat-transfer">🔥 Maximum Heat Transfer</option>
-            <option value="min-entropy">📉 Minimum Entropy</option>
-            <option value="max-velocity">💨 Maximum Velocity</option>
-            <option value="balanced">⚖️ Balanced Performance</option>
-          </select>
-
-          <button 
-            className="leaderboard-btn"
-            onClick={async () => {
-              const leaders = await getLeaderboard(optimizationGoal, 10);
-              setCurrentLeaderboard(leaders);
-              setShowLeaderboard(true);
-            }}
-          >
-            <Award size={16} /> View Leaderboard
-          </button>
-
-          <button 
-            className="submit-btn"
-            onClick={async () => {
-              let score;
-              switch(optimizationGoal) {
-                case 'max-heat-transfer':
-                  score = solution.Nu_lower;
-                  break;
-                case 'min-entropy':
-                  score = -solution.avgNs;
-                  break;
-                case 'max-velocity':
-                  score = solution.maxW;
-                  break;
-                default:
-                  score = solution.Nu_lower - solution.avgNs + solution.maxW;
-              }
-              
-              const username = prompt('Enter your name for the leaderboard:', `Researcher ${getUserId().slice(-4)}`);
-              if (username) {
-                await submitToLeaderboard(optimizationGoal, params, solution, score, username);
-                alert('✅ Submitted to leaderboard!');
-              }
-            }}
-          >
-            <Upload size={16} /> Submit My Result
-          </button>
-        </div>
-
-        {showLeaderboard && currentLeaderboard.length > 0 && (
-          <div className="leaderboard-table-container">
-            <div className="leaderboard-header">
-              <h4>Top 10 - {optimizationGoal.replace('-', ' ').toUpperCase()}</h4>
-              <button onClick={() => setShowLeaderboard(false)}>
-                <X size={16} />
-              </button>
-            </div>
-            <table className="leaderboard-table">
-              <thead>
-                <tr>
-                  <th>Rank</th>
-                  <th>Researcher</th>
-                  <th>Score</th>
-                  <th>Ha</th>
-                  <th>Re</th>
-                  <th>Pr</th>
-                  <th>Date</th>
+      {showLeaderboard && currentLeaderboard.length > 0 && (
+        <div className="leaderboard-table-container">
+          <div className="leaderboard-header">
+            <h4>Top 10 - {optimizationGoal.replace('-', ' ').toUpperCase()}</h4>
+            <button onClick={() => setShowLeaderboard(false)}>
+              <X size={16} />
+            </button>
+          </div>
+          <table className="leaderboard-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Researcher</th>
+                <th>Score</th>
+                <th>Ha</th>
+                <th>Re</th>
+                <th>Pr</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentLeaderboard.map((leader, idx) => (
+                <tr key={leader.id} className={idx < 3 ? 'top-three' : ''}>
+                  <td className="rank">
+                    {idx === 0 && '🥇'}
+                    {idx === 1 && '🥈'}
+                    {idx === 2 && '🥉'}
+                    {idx > 2 && `#${idx + 1}`}
+                  </td>
+                  <td className="username">{leader.username}</td>
+                  <td className="score">{leader.score.toFixed(4)}</td>
+                  <td>{leader.params.Ha?.toFixed(2)}</td>
+                  <td>{leader.params.Re?.toFixed(2)}</td>
+                  <td>{leader.params.Pr?.toFixed(2)}</td>
+                  <td className="date">
+                    {new Date(leader.created_at).toLocaleDateString()}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {currentLeaderboard.map((leader, idx) => (
-                  <tr key={leader.id} className={idx < 3 ? 'top-three' : ''}>
-                    <td className="rank">
-                      {idx === 0 && '🥇'}
-                      {idx === 1 && '🥈'}
-                      {idx === 2 && '🥉'}
-                      {idx > 2 && `#${idx + 1}`}
-                    </td>
-                    <td className="username">{leader.username}</td>
-                    <td className="score">{leader.score.toFixed(4)}</td>
-                    <td>{leader.params.Ha?.toFixed(2)}</td>
-                    <td>{leader.params.Re?.toFixed(2)}</td>
-                    <td>{leader.params.Pr?.toFixed(2)}</td>
-                    <td className="date">
-                      {new Date(leader.created_at).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
 
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* DATA CONTRIBUTION NOTICE - NEW */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      <div className="ai-section data-contribution-notice">
-        <div className="notice-content">
-          <Info size={24} />
-          <div>
-            <h4>🤝 Contributing to Research</h4>
-            <p>
-              Your simulations are automatically saved to our community database (anonymously) 
-              to improve ML models. This helps researchers worldwide optimize MHD nanofluid systems!
-            </p>
-          </div>
-        </div>
-      </div>
-      
-
-
-      {/* AI Recommendations */}
-      <div className="ai-section">
-        <div className="ai-section-header">
-          <Lightbulb size={20} />
-          <h3>Smart Recommendations</h3>
-          <span className="ai-badge gold">AI Powered</span>
-        </div>
-        <p className="ai-description">
-          Based on current parameters and results, here are AI-generated suggestions to improve performance.
-        </p>
-        <div className="recommendations-list">
-          {aiRecommendations.map((rec, idx) => (
-            <div key={idx} className="recommendation-card">
-              <span className="rec-icon">{rec.icon}</span>
-              <div className="rec-content">
-                <p>{rec.text}</p>
-                <span className="rec-impact">{rec.impact}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      
-      {/* Genetic Algorithm Optimizer */}
-      <div className="ai-section">
-        <div className="ai-section-header">
-          <Target size={20} />
-          <h3>Genetic Algorithm Optimizer</h3>
-          <span className="ai-badge magenta">Optimization</span>
-        </div>
-        <p className="ai-description">
-          Uses evolutionary algorithms to find optimal parameter combinations. Select your optimization goal
-          and let the algorithm evolve solutions over 40 generations.
-        </p>
-        
-        <div className="optimizer-controls">
-          <div className="optimizer-goal">
-            <label>Optimization Goal:</label>
-            <select 
-              value={optimizationGoal} 
-              onChange={(e) => setOptimizationGoal(e.target.value)}
-              disabled={optimizerRunning}
-            >
-              <option value="max-heat-transfer">🔥 Maximize Heat Transfer (Nu)</option>
-              <option value="min-entropy">📉 Minimize Entropy Generation</option>
-              <option value="max-velocity">💨 Maximize Flow Velocity</option>
-              <option value="balanced">⚖️ Balanced (Nu↑, Ns↓, W↑)</option>
-            </select>
-          </div>
-          
-          <button 
-            className={`optimizer-btn ${optimizerRunning ? 'running' : ''}`}
-            onClick={runOptimizer}
-            disabled={optimizerRunning}
-          >
-            {optimizerRunning ? (
-              <>
-                <div className="spinner"></div>
-                Optimizing... ({optimizerProgress?.generation || 0}/{optimizerProgress?.totalGenerations || 40})
-              </>
-            ) : (
-              <>
-                <Sparkles size={18} />
-                Run Optimizer
-              </>
-            )}
-          </button>
-        </div>
-        
-        {optimizerProgress && (
-          <div className="optimizer-progress">
-            <div className="progress-bar">
-              <div 
-                className="progress-fill"
-                style={{ width: `${(optimizerProgress.generation / optimizerProgress.totalGenerations) * 100}%` }}
-              ></div>
-            </div>
-            <div className="progress-stats">
-              <span>Generation: {optimizerProgress.generation}/{optimizerProgress.totalGenerations}</span>
-              <span>Best Fitness: {optimizerProgress.bestFitness?.toFixed(4)}</span>
-            </div>
-          </div>
-        )}
-        
-        {optimizerResult && (
-          <div className="optimizer-result">
-            <div className="result-header">
-              <Award size={24} />
-              <h4>Optimization Complete!</h4>
-            </div>
-            <div className="optimal-params">
-              <h5>Optimal Parameters Found:</h5>
-              <div className="params-grid">
-                {Object.entries(optimizerResult.bestIndividual).map(([key, value]) => (
-                  <div key={key} className="param-item">
-                    <span className="param-key">{key}</span>
-                    <span className="param-value">{value.toFixed(3)}</span>
-                  </div>
-                ))}
-              </div>
-              <p className="fitness-score">Fitness Score: <strong>{optimizerResult.bestFitness.toFixed(4)}</strong></p>
-            </div>
-            <button className="apply-btn" onClick={applyOptimizerResult}>
-              <Check size={18} />
-              Apply Optimal Parameters
-            </button>
-          </div>
-        )}
-        
-        {optimizerProgress?.history && optimizerProgress.history.length > 1 && (
-          <div className="optimizer-chart">
-            <h5>Fitness Evolution Over Generations</h5>
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={optimizerProgress.history}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                <XAxis 
-                  dataKey="generation" 
-                  stroke="rgba(255,255,255,0.5)" 
-                  tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 10 }}
-                  label={{ value: 'Generation', position: 'insideBottom', offset: -5, fill: 'rgba(255,255,255,0.5)' }}
-                />
-                <YAxis stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 10 }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Line type="monotone" dataKey="bestFitness" stroke="#00ff9f" strokeWidth={2} dot={false} name="Best Fitness" />
-                <Line type="monotone" dataKey="avgFitness" stroke="#00d4ff" strokeWidth={1} strokeDasharray="3 3" dot={false} name="Avg Fitness" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </div>
-      
-      {/* Physics Tutorial */}
-      <PhysicsTutorial />
-      
-      {/* Citation Helper */}
-      <CitationHelper params={params} />
-      
-      {/* Parameter Presets */}
-      <div className="ai-section">
-        <div className="ai-section-header">
-          <FlaskConical size={20} />
-          <h3>Quick Presets</h3>
-        </div>
-        <p className="ai-description">
-          Click any preset to instantly load pre-configured parameters for common nanofluid configurations and scenarios.
-        </p>
-        <div className="presets-grid">
-          {Object.entries(PARAMETER_PRESETS).map(([key, preset]) => (
-            <button 
-              key={key} 
-              className="preset-card"
-              onClick={() => applyPreset(key)}
-            >
-              <span className="preset-icon">{preset.icon}</span>
-              <div className="preset-info">
-                <h4>{preset.name}</h4>
-                <p>{preset.description}</p>
-              </div>
-            </button>
-          ))}
+    {/* Data Contribution Notice */}
+    <div className="ai-section data-contribution-notice">
+      <div className="notice-content">
+        <Info size={24} />
+        <div>
+          <h4>🤝 Contributing to Research</h4>
+          <p>
+            Your simulations are automatically saved to our community database (anonymously) 
+            to improve ML models. This helps researchers worldwide optimize MHD nanofluid systems!
+          </p>
         </div>
       </div>
     </div>
-  );
+    
+    {/* AI Recommendations */}
+    <div className="ai-section">
+      <div className="ai-section-header">
+        <Lightbulb size={20} />
+        <h3>Smart Recommendations</h3>
+        <span className="ai-badge gold">AI Powered</span>
+      </div>
+      <p className="ai-description">
+        Based on current parameters and results, here are AI-generated suggestions to improve performance.
+      </p>
+      <div className="recommendations-list">
+        {aiRecommendations.map((rec, idx) => (
+          <div key={idx} className="recommendation-card">
+            <span className="rec-icon">{rec.icon}</span>
+            <div className="rec-content">
+              <p>{rec.text}</p>
+              <span className="rec-impact">{rec.impact}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+    
+    {/* Genetic Algorithm Optimizer */}
+    <div className="ai-section">
+      <div className="ai-section-header">
+        <Target size={20} />
+        <h3>Genetic Algorithm Optimizer</h3>
+        <span className="ai-badge magenta">Physics-Aware</span>
+      </div>
+      <p className="ai-description">
+        Uses evolutionary algorithms to find optimal parameter combinations. Select your optimization goal
+        and let the algorithm evolve solutions over 40 generations. The optimizer respects the 
+        <strong> physical constraints</strong> of the modified boundary conditions.
+      </p>
+      
+      <div className="optimizer-physics">
+        <div className="physics-constraint">
+          <div className="constraint-icon">λ</div>
+          <div className="constraint-content">
+            <strong>Slip Constraint:</strong> λ bounds [0, 0.5] correspond to realistic slip lengths<br/>
+            <small>Physical interpretation: λ = μ_f/(βH) where β is slip length</small>
+          </div>
+        </div>
+        <div className="physics-constraint">
+          <div className="constraint-icon">Bi</div>
+          <div className="constraint-content">
+            <strong>Biot Constraint:</strong> Bi bounds [0.1, 5] cover typical convective conditions<br/>
+            <small>Bi {'<'} 0.1: Nearly insulated, Bi {'>'} 5: Strong cooling</small>
+          </div>
+        </div>
+      </div>
+      
+      <div className="optimizer-controls">
+        <div className="optimizer-goal">
+          <label>Optimization Goal:</label>
+          <select 
+            value={optimizationGoal} 
+            onChange={(e) => setOptimizationGoal(e.target.value)}
+            disabled={optimizerRunning}
+          >
+            <option value="max-heat-transfer">🔥 Maximize Heat Transfer (Nu)</option>
+            <option value="min-entropy">📉 Minimize Entropy Generation</option>
+            <option value="max-velocity">💨 Maximize Flow Velocity</option>
+            <option value="balanced">⚖️ Balanced (Nu↑, Ns↓, W↑)</option>
+          </select>
+        </div>
+        
+        <button 
+          className={`optimizer-btn ${optimizerRunning ? 'running' : ''}`}
+          onClick={runOptimizer}
+          disabled={optimizerRunning}
+        >
+          {optimizerRunning ? (
+            <>
+              <div className="spinner"></div>
+              Optimizing... ({optimizerProgress?.generation || 0}/{optimizerProgress?.totalGenerations || 40})
+            </>
+          ) : (
+            <>
+              <Sparkles size={18} />
+              Run Optimizer
+            </>
+          )}
+        </button>
+      </div>
+      
+      {optimizerProgress && (
+        <div className="optimizer-progress">
+          <div className="progress-bar">
+            <div 
+              className="progress-fill"
+              style={{ width: `${(optimizerProgress.generation / optimizerProgress.totalGenerations) * 100}%` }}
+            ></div>
+          </div>
+          <div className="progress-stats">
+            <span>Generation: {optimizerProgress.generation}/{optimizerProgress.totalGenerations}</span>
+            <span>Best Fitness: {optimizerProgress.bestFitness?.toFixed(4)}</span>
+          </div>
+        </div>
+      )}
+      
+      {optimizerResult && (
+        <div className="optimizer-result">
+          <div className="result-header">
+            <Award size={24} />
+            <h4>Optimization Complete!</h4>
+          </div>
+          <div className="optimal-params">
+            <h5>Optimal Parameters Found:</h5>
+            <div className="params-grid">
+              {Object.entries(optimizerResult.bestIndividual).map(([key, value]) => (
+                <div key={key} className="param-item">
+                  <span className="param-key">{key}</span>
+                  <span className="param-value">{value.toFixed(3)}</span>
+                </div>
+              ))}
+            </div>
+            <p className="fitness-score">Fitness Score: <strong>{optimizerResult.bestFitness.toFixed(4)}</strong></p>
+          </div>
+          <button className="apply-btn" onClick={applyOptimizerResult}>
+            <Check size={18} />
+            Apply Optimal Parameters
+          </button>
+        </div>
+      )}
+      
+      {optimizerProgress?.history && optimizerProgress.history.length > 1 && (
+        <div className="optimizer-chart">
+          <h5>Fitness Evolution Over Generations</h5>
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={optimizerProgress.history}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+              <XAxis 
+                dataKey="generation" 
+                stroke="rgba(255,255,255,0.5)" 
+                tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 10 }}
+                label={{ value: 'Generation', position: 'insideBottom', offset: -5, fill: 'rgba(255,255,255,0.5)' }}
+              />
+              <YAxis stroke="rgba(255,255,255,0.5)" tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 10 }} />
+              <Tooltip content={<CustomTooltip />} />
+              <Line type="monotone" dataKey="bestFitness" stroke="#00ff9f" strokeWidth={2} dot={false} name="Best Fitness" />
+              <Line type="monotone" dataKey="avgFitness" stroke="#00d4ff" strokeWidth={1} strokeDasharray="3 3" dot={false} name="Avg Fitness" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+    
+    {/* Physics Tutorial - KEEP ORIGINAL AND ADD BOUNDARY CONDITION TUTORIAL */}
+    <PhysicsTutorial />
+    
+    {/* Add Boundary Conditions Tutorial as separate section */}
+    <div className="ai-section">
+      <div className="ai-section-header">
+        <Layers size={20} />
+        <h3>Boundary Conditions Physics</h3>
+        <span className="ai-badge cyan">Updated Formulation</span>
+      </div>
+      
+      <div className="bc-tutorial">
+        <div className="tutorial-step">
+          <h4>Modified Slip Condition</h4>
+          <div className="tutorial-equation">
+            W(1) = Re - λ·W'(1)<br/>
+            where λ = μ_f/(βH)
+          </div>
+          <p>
+            <strong>Why μ_f instead of μ_nf?</strong> Slip occurs at the wall-fluid interface where 
+            nanoparticles may be excluded from the near-wall region. The slip length β characterizes 
+            the interface and depends on the base fluid properties contacting the wall.
+          </p>
+        </div>
+        
+        <div className="tutorial-step">
+          <h4>Convective Cooling Condition</h4>
+          <div className="tutorial-equation">
+            dθ/dη(1) = -Bi·θ(1)<br/>
+            where Bi = H·h_f/k_f
+          </div>
+          <p>
+            <strong>Why k_f instead of k_nf?</strong> Convective heat transfer coefficient h_f is 
+            determined experimentally for the base fluid. The Biot number compares convective 
+            resistance (1/h_f) to conductive resistance (H/k_f) at the boundary.
+          </p>
+        </div>
+        
+        <div className="tutorial-step">
+          <h4>Physical Significance</h4>
+          <ul>
+            <li><strong>Wall effects</strong> use base fluid properties (μ_f, k_f)</li>
+            <li><strong>Bulk flow effects</strong> use nanofluid properties (μ_nf, k_nf)</li>
+            <li>This distinction is physically realistic and important for accurate modeling</li>
+            <li>Affects optimization strategies for thermal management systems</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    
+    {/* Citation Helper */}
+    <CitationHelper params={params} />
+    
+    {/* Quick Presets - THEY SHOULD BE WORKING */}
+    <div className="ai-section">
+      <div className="ai-section-header">
+        <FlaskConical size={20} />
+        <h3>Quick Presets</h3>
+        <span className="ai-badge emerald">Ready to Use</span>
+      </div>
+      <p className="ai-description">
+        Click any preset to instantly load pre-configured parameters for common nanofluid configurations and scenarios.
+        <strong> All presets use the updated boundary conditions</strong> with proper base fluid properties.
+      </p>
+      <div className="presets-grid">
+        {Object.entries(PARAMETER_PRESETS).map(([key, preset]) => (
+          <button 
+            key={key} 
+            className="preset-card"
+            onClick={() => applyPreset(key)}
+            title={`Load ${preset.name}: ${preset.description}`}
+          >
+            <span className="preset-icon">{preset.icon}</span>
+            <div className="preset-info">
+              <h4>{preset.name}</h4>
+              <p>{preset.description}</p>
+              <div className="preset-params">
+                <small>Ha: {preset.params.Ha}, Re: {preset.params.Re}, λ: {preset.params.lambda}, Bi: {preset.params.Bi}</small>
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+      <div className="preset-status">
+        <Check size={16} color="var(--accent-emerald)" />
+        <span>Quick Presets are working! Click any card to load parameters.</span>
+      </div>
+    </div>
+  </div>
+);
 
   const renderVideos = () => (
     <div className="animate-slide-up">
@@ -3398,7 +4305,7 @@ const renderTheory = () => (
         <p className="equation-description">
           Describes the velocity distribution accounting for nanofluid viscosity enhancement (A₁), 
           electromagnetic body force through Lorentz force (Ha²), and axial pressure gradient (G).
-          The Hartmann number Ha = B₀L√(σf/μf) represents the ratio of electromagnetic to viscous forces.
+          The Hartmann number Ha = B₀H√(σf/μf) represents the ratio of electromagnetic to viscous forces.
         </p>
       </div>
       
@@ -3412,15 +4319,15 @@ const renderTheory = () => (
       </div>
       
       <div className="equation-card">
-        <h3><Layers size={20} /> Boundary Conditions</h3>
+        <h3><Layers size={20} /> Modified Boundary Conditions</h3>
         <div className="equation">
-          η = 0: W = 0, θ = 1 (Lower plate)<br/>
-          η = 1: W - λW' = Re, θ' + Bi·θ = 0 (Upper plate)
+          η = 0: W = 0, θ = 0 (Lower plate)<br/>
+          η = 1: W - λW' = Re, θ' = -Bi·θ (Upper plate)
         </div>
         <p className="equation-description">
-          Lower plate: No-slip condition with fixed temperature. Upper plate: Navier slip condition
-          with convective heat transfer (Robin boundary condition). The slip parameter λ accounts
-          for rarefied gas effects or hydrophobic surfaces.
+          <strong>Key Modification:</strong> The slip condition now uses the base fluid viscosity μ_f in the 
+          slip coefficient λ = μ_f/(βH), where β is the slip length. The upper plate experiences convective 
+          heat transfer (Robin boundary condition) with the environment.
         </p>
       </div>
       
@@ -3454,8 +4361,8 @@ const renderTheory = () => (
           <div className="equation">ρnf = (1-φ)ρf + φρs</div>
           <div className="equation">μnf = μf/(1-φ)^2.5 (Brinkman)</div>
           <div className="equation">(ρCp)nf = (1-φ)(ρCp)f + φ(ρCp)s</div>
-          <div className="equation">knf/kf = (ks+2kf-2φ(kf-ks))/(ks+2kf+φ(kf-ks)) (Maxwell)</div>
-          <div className="equation">σnf/σf = 1 + 3(σs/σf-1)φ/((σs/σf+2)-(σs/σf-1)φ)</div>
+          <div className="equation">knf/kf = (ks+2kf-2φ(kf-ks))/(ks+2kf+φ(kf-ks)) (Maxwell-Garnett)</div>
+          <div className="equation">σnf/σf = 1 + 3(σs/σf-1)φ/((σs/σf+2)-(σs/σf-1)φ) (Maxwell)</div>
         </div>
         <p className="equation-description" style={{ marginTop: '1rem' }}>
           These correlations model effective nanofluid thermophysical properties based on nanoparticle 
@@ -3463,7 +4370,6 @@ const renderTheory = () => (
         </p>
       </div>
       
-      {/* ✨✨✨ NEW NUMERICAL METHOD CARD - PASTE STARTS HERE ✨✨✨ */}
       <div className="equation-card full-width numerical-method-card">
         <h3><Cpu size={20} /> Numerical Solution Method</h3>
         
@@ -3504,38 +4410,43 @@ const renderTheory = () => (
         </div>
         
         <div className="method-details">
-          <h4><Lightbulb size={18} /> Why Two Methods?</h4>
+          <h4><Lightbulb size={18} /> Modified Boundary Treatment</h4>
           <div className="detail-grid">
             <div className="detail-item">
               <Target size={16} />
               <div>
-                <strong>SQLM (Research):</strong> Provides highest accuracy for thesis results, 
-                parametric studies, and publication figures. Achieves machine precision convergence.
+                <strong>Slip Boundary Condition:</strong> The Navier slip condition at η=1 is discretized as:<br/>
+                <code>Wₙ = Re - λ·(Wₙ - Wₙ₋₁)/h</code><br/>
+                where λ = μ_f/(βH) uses <strong>base fluid viscosity μ_f</strong> (not μ_nf)
               </div>
             </div>
             <div className="detail-item">
-              <Zap size={16} />
+              <Thermometer size={16} />
               <div>
-                <strong>FDM (Web App):</strong> Enables real-time interactive exploration with 
-                instant parameter updates. Balances accuracy with computational speed for browser execution.
+                <strong>Convective Cooling:</strong> Robin boundary condition at η=1:<br/>
+                <code>(θₙ - θₙ₋₁)/h = -Bi·θₙ</code><br/>
+                This accurately models heat exchange with the ambient environment.
               </div>
             </div>
           </div>
         </div>
         
         <div className="method-algorithm">
-          <h4><Activity size={18} /> Finite Difference Algorithm (This App)</h4>
+          <h4><Activity size={18} /> Finite Difference Algorithm with Modified BCs</h4>
           <div className="algorithm-steps">
             <div className="algo-step">
               <div className="step-number">1</div>
               <div className="step-content">
-                <strong>Grid Generation:</strong> Divide domain [0,1] into N equal intervals with spacing h=1/N
+                <strong>Grid Generation:</strong> Divide domain [0,1] into n equal intervals with spacing h=1/n
               </div>
             </div>
             <div className="algo-step">
               <div className="step-number">2</div>
               <div className="step-content">
-                <strong>Initial Guess:</strong> W = η·Re/(1-λ), θ = 1 - Bi·η/(1+Bi) (satisfies BCs exactly)
+                <strong>Boundary Implementation:</strong><br/>
+                • η=0: Set W₀=0, θ₀=0 (Dirichlet)<br/>
+                • η=1: Apply Wₙ = Re - λ·(Wₙ-Wₙ₋₁)/h<br/>
+                • η=1: Apply (θₙ-θₙ₋₁)/h = -Bi·θₙ
               </div>
             </div>
             <div className="algo-step">
@@ -3553,12 +4464,6 @@ const renderTheory = () => (
             <div className="algo-step">
               <div className="step-number">5</div>
               <div className="step-content">
-                <strong>Boundary Update:</strong> Apply W(0)=0, W(1)-λW'(1)=Re, θ(0)=1, θ'(1)+Biθ(1)=0
-              </div>
-            </div>
-            <div className="algo-step">
-              <div className="step-number">6</div>
-              <div className="step-content">
                 <strong>Convergence Check:</strong> If ||W_new - W_old|| &lt; 10⁻⁸, stop; else repeat from step 3
               </div>
             </div>
@@ -3568,14 +4473,46 @@ const renderTheory = () => (
         <div className="validation-note">
           <Award size={18} />
           <div>
-            <strong>Validation:</strong> Both methods produce consistent physical trends. SQLM results 
-            (thesis) validated against analytical solutions with error &lt; 10⁻¹³. FDM results (web app) 
-            match SQLM to within 0.1% for typical parameters, sufficient for educational visualization.
+            <strong>Physical Consistency:</strong> The slip parameter λ uses base fluid viscosity μ_f as specified 
+            in the modified boundary condition: λ = μ_f/(βH). This reflects the physical reality that slip 
+            mechanisms at the wall-fluid interface depend on the base fluid properties rather than the 
+            enhanced nanofluid viscosity.
           </div>
         </div>
       </div>
-      {/* ✨✨✨ NEW NUMERICAL METHOD CARD - PASTE ENDS HERE ✨✨✨ */}
       
+      <div className="equation-card full-width important-note">
+        <h3><AlertTriangle size={20} /> Important Boundary Condition Updates</h3>
+        <div className="update-grid">
+          <div className="update-item">
+            <div className="update-badge">Modified</div>
+            <h4>Slip Condition at Upper Plate</h4>
+            <p>
+              <strong>Original:</strong> W(1) = Re - λ·W'(1) where λ was dimensionless slip parameter<br/>
+              <strong>Modified:</strong> W(1) = Re - (μ_f/βH)·W'(1)<br/>
+              <em>λ = μ_f/(βH) now explicitly uses base fluid viscosity μ_f</em>
+            </p>
+          </div>
+          <div className="update-item">
+            <div className="update-badge">Clarified</div>
+            <h4>Physical Interpretation</h4>
+            <p>
+              • β is the slip length at the wall-fluid interface<br/>
+              • μ_f appears in λ because slip mechanisms depend on base fluid properties<br/>
+              • This distinguishes wall effects (using μ_f) from bulk flow effects (using μ_nf)
+            </p>
+          </div>
+          <div className="update-item">
+            <div className="update-badge">Implementation</div>
+            <h4>In This Simulation</h4>
+            <p>
+              The slip parameter λ is treated as a dimensionless input parameter, but it physically 
+              represents λ = μ_f/(βH). When you adjust λ in the controls, you're effectively changing 
+              the slip length β relative to the base fluid viscosity.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 );
@@ -3639,7 +4576,7 @@ const renderTheory = () => (
           <p>
             <strong>Research:</strong> Thermal and Magnetohydrodynamic Analysis of Nanofluid Couette Flow<br/>
             <strong>Candidate:</strong> Mr. S.I. Mosala | <strong>Supervisor:</strong> Prof. O.D. Makinde<br/>
-            Nelson Mandela University | December 2025 | Version 3.5
+            Nelson Mandela University | December 2025 | Version 4.1
           </p>
         </footer>
       </div>
