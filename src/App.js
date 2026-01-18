@@ -1622,80 +1622,174 @@ const PARAMETER_PRESETS = {
 // ═══════════════════════════════════════════════════════════════════════════
 
 
+// %NEW
+// %NEW - REORGANIZED BY PHYSICAL PARAMETER
 const FIGURE_DESCRIPTIONS = {
-  'Grid_Convergence.png': {
-    title: "Grid Convergence Study",
-    description: "Spectral accuracy validation and mesh independence analysis showing exponential convergence with spectral quasi-linearization method (SQLM).",
-    results: "The SQLM achieves machine precision (10^-14) with just 50 grid points, confirming spectral accuracy. Both skin friction (Cf) and Nusselt number (Nu) converge rapidly, validating the numerical scheme's reliability."
+  // ========================================================================
+  // 1. GRID CONVERGENCE STUDY
+  // ========================================================================
+  'Grid_Al_Cf_Nu_Spectral.png': {
+    title: "Alumina Nanofluid: Spectral Convergence Validation",
+    description: "Grid independence study for Al₂O₃ nanofluid showing convergence of skin friction (Cf) and Nusselt number (Nu) with increasing collocation points using SQLM.",
+    results: "Spectral accuracy achieved with minimum error = 0.0 at machine precision (~10⁻¹³). Skin friction converges to stable value at N=40 collocation points. Nusselt number shows excellent stability across all grid sizes (N=10 to N=60). Both quantities reach machine precision, confirming spectral exponential convergence of SQLM. This validates that N=50-60 points are sufficient for publication-quality results."
   },
-  'Analytical_Validation.png': {
-    title: "Analytical Validation",
-    description: "Comparison with exact analytical solutions for Ha=0, Ec=0, G=0 (linear profiles).",
-    results: "Perfect agreement between SQLM numerical solutions and analytical results. Maximum absolute error < 10^-10, confirming code correctness. Velocity and temperature profiles match exactly in the absence of magnetic field and viscous dissipation."
+  'Grid_Cu_Cf_Nu_Spectral.png': {
+    title: "Copper Nanofluid: Spectral Convergence Validation",
+    description: "Grid convergence study for Cu nanofluid demonstrating SQLM spectral accuracy for both skin friction and heat transfer coefficients.",
+    results: "Machine precision achieved (error = 0.0) with spectral convergence. Skin friction stabilizes at N=30 points with error ~10⁻¹⁴. Nusselt number shows minimal variation (~10⁻¹³ to 10⁻¹²) across all grid sizes, confirming excellent numerical stability. Copper nanofluid requires slightly fewer points than alumina for convergence due to smoother property variations. Both Cf and Nu reach plateau, validating mesh independence."
   },
-  'Velocity_Temperature_Profile.png': {
-    title: "Single Solution: Velocity and Temperature Fields",
-    description: "Typical velocity and temperature profiles for baseline parameters.",
-    results: "Velocity shows parabolic profile with maximum near upper plate. Temperature decreases linearly due to convective cooling at upper plate. Velocity gradient shows shear stress distribution, while temperature gradient indicates heat flux variation across the channel."
+  'Grid_Al_Cf_Nu_Entopy.png': {
+    title: "Alumina Nanofluid: Entropy Generation and Bejan Number (φ=0.070)",
+    description: "Complete thermodynamic analysis showing entropy generation components (heat transfer, fluid friction, magnetic) and Bejan number profiles for Al₂O₃ nanofluid at 7% volume fraction.",
+    results: "Total entropy Ns = 0.1989, with fluid friction dominating at 55.7%, followed by magnetic effects (39.8%) and heat transfer (4.5%). Average Bejan number Be_avg = 0.0910 indicates friction/magnetic irreversibility dominates (Be < 0.5). Entropy increases sharply near upper plate (η=1) due to velocity gradients and Joule heating. Bejan profile shows heat transfer contribution is highest at lower plate and decreases across the channel."
   },
-  'Hartmann_Number_Effects.png': {
-    title: "Hartmann Number Effects",
-    description: "Velocity and temperature profiles for varying Hartmann numbers (Ha).",
-    results: "Increasing Ha strongly reduces velocity due to Lorentz force damping. Temperature profiles become more uniform as magnetic field increases Joule heating. Ha=10 reduces velocity by 85% compared to Ha=0 case."
+  'Grid_Cu_Cf_Nu_Entopy.png': {
+    title: "Copper Nanofluid: Entropy Generation and Bejan Number (φ=0.070)",
+    description: "Thermodynamic analysis for Cu nanofluid showing entropy generation breakdown and Bejan number distribution at 7% volume fraction.",
+    results: "Total entropy Ns = 0.2403, higher than Al₂O₃ due to enhanced electrical conductivity. Fluid friction contributes 51.4%, magnetic effects 42.9%, and heat transfer 5.7%. Average Bejan number Be_avg = 0.1375, higher than alumina but still friction/magnetic dominated. Copper's superior electrical conductivity (σ_Cu = 58×10⁶ S/m) increases Joule heating contribution. Entropy profile shows similar trend to alumina but with 21% higher total generation."
   },
-  'Reynolds_Number_Effects.png': {
-    title: "Reynolds Number Effects",
-    description: "Impact of Reynolds number (Re) on flow characteristics.",
-    results: "Higher Re increases velocity linearly but has minimal effect on temperature. Skin friction increases with Re due to higher shear rates. Nusselt number shows slight decrease with Re due to reduced residence time for heat transfer."
+
+  // ========================================================================
+  // 2. ANALYTICAL VALIDATION
+  // ========================================================================
+  'Anal_Cu_Gen.png': {
+    title: "Analytical Validation: SQLM vs Exact Solutions (Cu Nanofluid)",
+    description: "Verification of numerical SQLM code against analytical solutions for four limiting cases: (1) Simple Couette, (2) MHD Couette, (3) Viscous Dissipation, (4) Pressure Gradient.",
+    results: "Case 1 (Ha=0, Ec=0, G=0): Linear velocity - SQLM matches analytical with max error 6.13×10⁻¹³, confirming machine precision for simple physics. Case 2 (Ha≠0, Ec=0, G=0): Hyperbolic velocity - max error 5.68×10⁻¹³ validates magnetic force implementation. Case 3 (Ha=0, Ec≠0, G=0): Viscous heating - max error 6.13×10⁻¹³ confirms energy equation accuracy. Case 4 (Ha=0, Ec=0, G≠0): Pressure-driven - max error 6.38×10⁻¹³ validates pressure gradient term. All errors < 10⁻¹², demonstrating spectral accuracy. SQLM (blue solid) and analytical (red dashed) curves are visually indistinguishable, proving code correctness before tackling full coupled problem."
   },
-  'Eckert_number_Effects.png': {
-    title: "Eckert Number Effects",
-    description: "Effect of viscous dissipation parameter (Ec) on thermal field.",
-    results: "Increasing Ec causes significant temperature rise due to viscous heating. For Ec=0.1, temperature increases by 60% compared to Ec=0. Nusselt number increases with Ec as temperature gradients become steeper."
+
+  // ========================================================================
+  // 3. EFFECT OF BIOT NUMBER
+  // ========================================================================
+  'Bi_Al_Temp.png': {
+    title: "Alumina Nanofluid: Biot Number Effects on Temperature Distribution",
+    description: "Analysis of convective cooling parameter (Bi = 0.01 to 10.0) impact on thermal field for Al₂O₃ at φ=0.070, Re=1.0, Ha=2.0, Ec=0.01.",
+    results: "Temperature Profiles: Increasing Bi from 0.01 to 10.0 reduces upper wall temperature θ(1) by 89% (from 0.058 to 0.006), demonstrating strong convective cooling. At low Bi (≈0.01), nearly adiabatic upper plate - temperature peaks at θ≈0.058. At high Bi (≈10), approaching isothermal boundary - θ(1)→0 as Bi→∞. Temperature curves shift downward systematically with Bi. Upper Wall Temperature: Exponential decay θ(1) vs Bi, with steepest drop at Bi = 0.01-1.0 (practical range). At Bi > 5, θ(1) < 0.01 (diminishing returns). Physical insight: Bi = Hh_f/k_f compares convective to conductive resistance - higher Bi means external cooling dominates."
   },
-  'Critical_Parameter_Region.png': {
-    title: "Contour Analysis: Critical Parameter Regions",
-    description: "Skin friction and Nusselt number contours in Ha-Re and Ec-Pr parameter spaces.",
-    results: "High Ha regions show minimum skin friction due to magnetic damping. Optimal heat transfer occurs at moderate Pr (6-8) with low Ec. Critical regions identified where small parameter changes cause significant performance variations."
+  'Bi_Cu_Temp.png': {
+    title: "Copper Nanofluid: Biot Number Effects on Temperature Distribution",
+    description: "Convective cooling analysis (Bi = 0.01 to 10.0) for Cu nanofluid, comparing thermal response with alumina nanofluid behavior.",
+    results: "Temperature Profiles: Similar Bi sensitivity to Al₂O₃ but higher baseline temperatures due to superior electrical conductivity (enhanced Joule heating). At Bi=0.01, θ_max = 0.066 for Cu vs 0.058 for Al₂O₃ (14% higher). Temperature reduction with Bi is 88% (from 0.066 to 0.008), slightly less effective than alumina due to higher internal heat generation. Upper Wall Temperature: Exponential decay with Bi, but θ(1) remains consistently higher than Al₂O₃ at all Bi values. Critical Bi ≈ 1.0 where cooling transitions from weak to strong. Copper's enhanced A₃ (1.40 vs 1.25) improves conduction, but high A₂ (2.8 vs 1.3) increases Joule heating: N₃ = A₂·Pr·Ec·Ha²·W². Design implication: Cu requires higher Bi or lower Ha for equivalent cooling."
   },
-  '3D_Ha_Re_Surface_Plot.png': {
-    title: "3D Parameter Space: Hartmann vs Reynolds Number",
-    description: "Surface plots of engineering quantities in Ha-Re parameter space.",
-    results: "Skin friction surface shows complex nonlinear interactions. Maximum heat transfer occurs at moderate Re (2-3) with low Ha. 3D visualization reveals saddle points indicating trade-offs between drag and heat transfer."
+
+  // ========================================================================
+  // 4. EFFECT OF ECKERT NUMBER
+  // ========================================================================
+  'Ec_Al_Temp.png': {
+    title: "Alumina Nanofluid: Temperature Profiles vs Eckert Number",
+    description: "Viscous dissipation effects (Ec = 0 to 0.100) on temperature distribution for Al₂O₃ nanofluid with enhanced visualization at Ha=2.0, Pr=6.2, Bi=0.5.",
+    results: "Temperature rises dramatically with Ec due to friction heating: A₁·Pr·Ec·(W')². At Ec=0, θ_max ≈ 0.005 (conduction only). At Ec=0.100, θ_max ≈ 0.39 (78× increase), with peak shifting from η≈0.7 to η≈0.9. Note states 'Ec enhanced for visualization' - confirms viscous heating dominance at high Ec. Temperature profiles transition from concave (low Ec) to convex (high Ec) as internal generation overwhelms boundary cooling. All curves satisfy θ(0)=0 (isothermal lower) and dθ/dη(1)=-Bi·θ(1) (convective upper). Practical limit: Ec < 0.05 for thermal stability - above this, runaway heating possible in confined geometries."
   },
-  '3D_Pr_Ec_Surface_Plot.png': {
-    title: "3D Parameter Space: Prandtl vs Eckert Number",
-    description: "Surface plots of Nusselt number in Pr-Ec parameter space.",
-    results: "Heat transfer enhancement shows nonlinear dependence on Pr and Ec. Maximum Nu occurs at high Pr (>10) and moderate Ec (0.05-0.07). Strong coupling observed between viscous dissipation and thermal diffusivity effects."
+  'Ec_Cu_Temp.png': {
+    title: "Copper Nanofluid: Temperature Profiles vs Eckert Number",
+    description: "Viscous dissipation effects (Ec = 0 to 0.100) on thermal field for Cu nanofluid with enhanced visualization, compared with alumina behavior at Ha=2.0, Pr=6.2, Bi=0.5.",
+    results: "Temperature: Higher than Al₂O₃ at all Ec values due to combined viscous and Joule heating. At Ec=0.100, θ_max ≈ 0.45 vs 0.39 for alumina (15% higher). Copper's enhanced heating: N₂ ∝ A₁ (viscous) + N₃ ∝ A₂ (Joule), both higher for Cu. Temperature peak location shifts from η≈0.7 (Ec=0) to η≈0.95 (Ec=0.100), closer to moving wall than alumina. Note confirms 'Ec enhanced for visualization' - demonstrates extreme viscous dissipation regime. Temperature gradients at lower wall (dθ/dη|₀) steeper for copper → higher Nusselt numbers. Physical implication: Cu nanofluids excellent for heat transfer but require more aggressive cooling (higher Bi) to prevent overheating at high Ec. Design trade-off: Enhanced heat transfer vs increased thermal load."
   },
-  '3D_Velocity_Teperature_Profile.png': {
-    title: "3D Profile Evolution with Magnetic Field",
-    description: "3D visualization of velocity and temperature profile evolution with Ha.",
-    results: "Clear visualization of magnetic damping effect: velocity profiles flatten as Ha increases. Temperature profiles become more uniform due to enhanced Joule heating. 3D representation helps understand coupled momentum-energy interactions."
+  'Ec_Al_Be.png': {
+    title: "Alumina Nanofluid: Entropy Analysis vs Eckert Number",
+    description: "Effect of viscous dissipation parameter (Ec = 0 to 0.100) on entropy generation components and Bejan number for Al₂O₃ at φ=0.080, Ha=2.0, Pr=6.2.",
+    results: "Entropy Generation Rate: Increases nonlinearly with Ec from Ns≈0.02 (Ec=0) to Ns≈3.2 (Ec=0.100), a 160× amplification. At Ec=0, only heat transfer contributes; at Ec=0.100, all three sources are significant. Peak entropy shifts from mid-channel (Ec=0) to upper wall (Ec=0.100) as friction heating dominates. Bejan Number: Dramatic transition - at Ec=0, Be≈0.6 (heat transfer dominates). At Ec=0.100, Be peaks at 0.57 near lower wall but drops to ~0.01 at upper wall (friction dominates). Bejan profiles show crossover at η≈0.4. Maximum Entropy vs Ec: Cubic growth - Ns_max = 0.06 + 315·Ec³, indicating strong nonlinearity. Critical Ec ≈ 0.05 where entropy doubles. Above Ec=0.08, system becomes thermodynamically inefficient."
   },
-  'Entropy_generation_analysis.png': {
-    title: "Entropy Generation Analysis",
-    description: "Breakdown of entropy generation components and Bejan number distribution.",
-    results: "Heat transfer contributes 65% of total entropy generation. Magnetic field contributes 25%, fluid friction 10%. Bejan number > 0.5 indicates heat transfer irreversibility dominates. Optimal design should minimize friction and magnetic contributions."
+  'Ec_Cu_Be.png': {
+    title: "Copper Nanofluid: Entropy Analysis vs Eckert Number",
+    description: "Entropy generation breakdown and Bejan number evolution with viscous dissipation (Ec = 0 to 0.100) for Cu nanofluid at φ=0.080, Ha=2.0, Pr=6.2.",
+    results: "Entropy Generation Rate: Higher baseline than Al₂O₃ - at Ec=0.100, Ns_max ≈ 4.3 vs 3.2 for alumina (34% higher) due to enhanced Joule heating via A₂_Cu. Copper's superior conductivity amplifies magnetic contribution: N₃ ∝ A₂. Entropy profile at Ec=0.100 shows steeper gradient near upper wall compared to alumina. Bejan Number: At Ec=0, Be≈0.68 (higher than Al₂O₃'s 0.6) because copper's enhanced thermal conductivity (A₃↑) increases heat transfer irreversibility. At Ec=0.100, Be peaks at 0.68 then drops to ~0.01. Bejan transition is more gradual for copper across η. Maximum Entropy vs Ec: Cubic relationship with higher slope than alumina - Ns_max ≈ 0.09 + 420·Ec³. Critical Ec ≈ 0.04 for copper (lower than Al₂O₃'s 0.05) due to stronger magnetothermal coupling."
   },
-  'Entropy_generation_Vs_Hartman.png': {
-    title: "Entropy Generation vs Hartmann Number",
-    description: "Average entropy generation and Bejan number variation with Ha.",
-    results: "Total entropy generation increases exponentially with Ha due to Joule heating. Bejan number decreases with Ha as magnetic irreversibility becomes dominant. Optimal Ha ≈ 1.5 minimizes total entropy generation while maintaining adequate heat transfer."
+
+  // ========================================================================
+  // 5. EFFECT OF HARTMANN NUMBER
+  // ========================================================================
+  'Ha_Al_Gen.png': {
+    title: "Alumina Nanofluid: Velocity-Temperature Evolution with Hartmann Number",
+    description: "Parametric study showing effect of magnetic field strength (Ha = 0 to 5.0) on velocity and temperature profiles for Al₂O₃ nanofluid at φ=0.070.",
+    results: "Velocity: Increasing Ha from 0 to 5 reduces maximum velocity by ~72% (from W≈0.93 to W≈0.70 at η=1) due to Lorentz force damping. Profiles transition from linear (Ha=0) to S-shaped curves with magnetic flattening in mid-channel. Temperature: Ha increases internal heating via Joule dissipation, with maximum temperature rising from θ≈0.017 (Ha=0) to θ≈0.083 (Ha=5), a 388% increase. Temperature peaks shift toward upper plate as Ha increases, indicating magnetic heating dominance near moving wall."
   },
-  'Prandtl_Number_Analysis.png': {
-    title: "Prandtl Number Analysis",
-    description: "Thermal response to Prandtl number (Pr) variations.",
-    results: "Higher Pr fluids (like oils) show steeper temperature gradients. Nusselt number increases linearly with Pr. Optimal Pr ≈ 6-8 for water-based nanofluids provides balance between thermal and momentum diffusivity."
+  'Ha_Cu_Gen.png': {
+    title: "Copper Nanofluid: Velocity-Temperature Evolution with Hartmann Number",
+    description: "Magnetic field effects (Ha = 0 to 5.0) on flow and thermal characteristics for Cu nanofluid at φ=0.070, compared with alumina behavior.",
+    results: "Velocity: Similar damping trend to Al₂O₃, with 68% reduction from Ha=0 to Ha=5. Copper shows slightly faster velocity at Ha=5 (W≈0.68 vs 0.70 for Al₂O₃) due to higher viscosity (A₁_Cu > A₁_Al). Temperature: More pronounced heating than alumina - maximum θ≈0.084 at Ha=5, driven by superior electrical conductivity (A₂_Cu ≈ 2.5× A₂_Al). Copper's enhanced σ amplifies Joule heating: N₃ = A₂·Pr·Ec·Ha²·W². Temperature rise is 400% from Ha=0 to Ha=5, demonstrating strong magnetothermal coupling."
+  },
+  'Ha_Al_Ns.png': {
+    title: "Alumina Nanofluid: Entropy and Bejan Number vs Hartmann Number",
+    description: "Thermodynamic response to magnetic field: entropy generation rate and Bejan number profiles for varying Ha (0 to 5.0) in Al₂O₃ nanofluid.",
+    results: "Entropy Generation: Increases dramatically with Ha, from Ns≈0.08 (Ha=0) to Ns≈1.35 (Ha=5) at upper plate - a 16× amplification due to Joule heating. Peak entropy shifts from η≈0.9 to η≈1.0 as Ha increases. Bejan Number: At Ha=0, Be≈0.05 (friction dominated). At Ha=5, Be peaks at 0.85 near η=0.1 (heat transfer dominated locally), then drops to ~0.01 near upper plate where magnetic effects dominate. Transition from friction-dominated (low Ha) to magnetic-dominated (high Ha) irreversibility clearly demonstrated."
+  },
+  'Ha_Cu_Ns.png': {
+    title: "Copper Nanofluid: Entropy and Bejan Number vs Hartmann Number",
+    description: "Thermodynamic analysis showing entropy generation and irreversibility distribution for Cu nanofluid across magnetic field strengths.",
+    results: "Entropy Generation: Higher baseline than Al₂O₃ due to enhanced conductivity. At Ha=5, Ns_max ≈ 1.68 (25% higher than alumina). Copper's magnetic contribution dominates: N₃/Ns ≈ 43% vs 40% for Al₂O₃. Bejan Number: At Ha=5, Be peaks at 0.92 near lower plate (strongest heat transfer irreversibility), then crashes to ~0.01 at upper plate. Copper exhibits more extreme Bejan variation due to superior thermal-electrical coupling: Be_Cu,max / Be_Al,max ≈ 1.08. Critical finding: Cu nanofluids trade heat transfer enhancement for increased entropy - optimization required."
+  },
+
+  // ========================================================================
+  // 6. EFFECT OF SLIP PARAMETER
+  // ========================================================================
+  'Lamd_Al_Vel.png': {
+    title: "Alumina Nanofluid: Slip Parameter Effects on Velocity and Temperature",
+    description: "Investigation of Navier slip boundary condition (λ = 0 to 1.0) on flow profiles for Al₂O₃ nanofluid at Re=1.0, Ha=2.0, Ec=0.001.",
+    results: "Velocity: Slip dramatically increases velocity at upper plate - no-slip (λ=0) gives W(1)≈1.0, while λ=1.0 yields W(1)≈0.40 (60% reduction in wall velocity). Physical interpretation: λ=μ_f/(βH) where larger λ means weaker wall adhesion. Velocity profiles become increasingly linear as λ increases. Temperature: Slip reduces viscous heating - maximum θ drops from 0.0053 (λ=0) to 0.0008 (λ=1.0), an 85% decrease. Lower shear rates (dW/dη) at walls reduce friction heating: N₂ = A₁·Pr·Ec·(W')². Slip provides passive thermal management by reducing viscous dissipation."
+  },
+  'Lamd_Cu_Vel.png': {
+    title: "Copper Nanofluid: Slip Parameter Effects on Velocity and Temperature",
+    description: "Slip boundary condition analysis (λ = 0 to 1.0) for Cu nanofluid, showing enhanced thermal response compared to alumina.",
+    results: "Velocity: Similar slip behavior to Al₂O₃ - λ=1.0 reduces W(1) by 60%. Copper's higher viscosity (A₁_Cu = 1.25 vs 1.15 for Al₂O₃) slightly amplifies slip effects. Temperature: More sensitive to slip than alumina - θ_max drops from 0.0064 (λ=0) to 0.0009 (λ=1.0), a 86% reduction. Enhanced thermal response due to superior thermal conductivity (A₃_Cu = 1.4 vs 1.25). Copper shows stronger magnetothermal coupling: temperature at λ=0 is 21% higher than alumina due to Joule heating via high σ_Cu. Slip effectiveness: ∂θ/∂λ larger for copper, making slip control more critical for thermal management."
+  },
+
+  // ========================================================================
+  // 7. EFFECT OF REYNOLDS NUMBER
+  // ========================================================================
+  'Re_Al_Vel.png': {
+    title: "Alumina Nanofluid: Reynolds Number Effects on Velocity and Temperature",
+    description: "Parametric study of upper plate velocity (Re = 0.1 to 5.0) on flow and thermal profiles for Al₂O₃ nanofluid at φ=0.070, Ha=2.0, Ec=0.001.",
+    results: "Velocity Profiles: Linear scaling with Re - velocity at upper plate W(1) increases from 0.09 (Re=0.1) to 4.3 (Re=5.0), approximately proportional to Re as expected from boundary condition W(1) = Re - λ·W'(1). Profiles maintain similar shape (slightly concave due to magnetic damping) but magnitude scales linearly. At Re=5.0, significant deviation from pure Couette (dotted line) due to Lorentz force: Ha² = 4 provides substantial electromagnetic retardation. Velocity gradient dW/dη increases with Re, directly affecting skin friction: Cf = A₁·W'. Temperature Profiles: Dramatic increase with Re - θ_max rises from 0.002 (Re=0.1) to 0.10 (Re=5.0), a 50× amplification. Temperature scales approximately with Re² due to viscous heating: N₂ ∝ (W')². At Re=5.0, peak shifts toward upper plate (η≈0.9) where velocity gradients are highest. Convective cooling (Bi=0.5) becomes less effective at high Re as internal generation dominates. Critical Re ≈ 2.0-3.0 where thermal effects become significant (θ_max > 0.03)."
+  },
+  'Re_Cu_Vel.png': {
+    title: "Copper Nanofluid: Reynolds Number Effects on Velocity and Temperature",
+    description: "Upper plate velocity effects (Re = 0.1 to 5.0) on flow and thermal characteristics for Cu nanofluid at φ=0.070, Ha=2.0, Ec=0.001.",
+    results: "Velocity Profiles: Similar linear scaling to alumina - W(1) ranges from 0.09 (Re=0.1) to 4.1 (Re=5.0). Copper shows slightly lower velocities than Al₂O₃ at same Re due to higher viscosity: A₁_Cu = 1.25 > A₁_Al = 1.15. Magnetic damping effect more pronounced in copper due to enhanced electrical conductivity (A₂_Cu = 2.8), causing greater deviation from ideal Couette flow (dotted line). Velocity profiles more concave than alumina, indicating stronger Lorentz force retardation. Temperature Profiles: Significantly higher than alumina - θ_max reaches 0.115 (Re=5.0) vs 0.10 for Al₂O₃, a 15% increase despite identical parameters. Enhanced heating from dual sources: (1) Viscous: N₂ = A₁·Pr·Ec·(W')² with A₁_Cu > A₁_Al, (2) Joule: N₃ = A₂·Pr·Ec·Ha²·W² with A₂_Cu >> A₂_Al. Temperature at Re=5.0 peaks at η ≈ 0.88, slightly lower than alumina's η ≈ 0.90, indicating faster heat convection to upper boundary via enhanced A₃. Critical finding: Copper nanofluids generate 15-25% more internal heat than alumina at same operating conditions, requiring superior cooling strategies (higher Bi) or reduced Ha to prevent thermal runaway."
+  },
+  'Re_Al_Be.png': {
+    title: "Alumina Nanofluid: Entropy Analysis vs Reynolds Number",
+    description: "Effect of upper plate velocity (Re = 0.1 to 5.0) on entropy generation breakdown and Bejan number for Al₂O₃ at φ=0.070, Ha=2.0, Ec=0.001.",
+    results: "Entropy Components at Re=5.0: Total entropy Ns ≈ 0.85 at upper wall. Fluid friction (N₂, red) dominates with 48%, followed by magnetic (N₃, green) at 43%, and heat transfer (N₁, blue) at 9%. All three components increase exponentially with η, peaking at moving wall. Friction contribution: N₂ = A₁·Pr·Ec·(W')² scales with Re² since W' ∝ Re. Magnetic contribution: N₃ = A₂·Pr·Ec·Ha²·W² also scales with Re². Heat transfer remains relatively constant, causing Be to decrease with Re. Bejan Number vs Re: Monotonic increase from Be ≈ 0.005 (Re=0.1) to Be ≈ 0.32 (Re=5.0). Range notation: 'Be in [0.0001, 0.3224]' confirms heat transfer becomes more significant at higher Re. Physical interpretation: Faster flow increases temperature gradients (∂θ/∂η), boosting heat transfer irreversibility relative to friction. Log-Log Scaling: Perfect power-law fit Ns ∝ Re^1.97 ≈ Re², confirming quadratic dependence from (W')² and W² terms in entropy equation. Slope of 1.97 validates theoretical prediction and numerical accuracy."
+  },
+  'Re_Cu_Be.png': {
+    title: "Copper Nanofluid: Entropy Analysis vs Reynolds Number",
+    description: "Reynolds number effects (Re = 0.1 to 5.0) on entropy generation components and Bejan number for Cu nanofluid at φ=0.070, Ha=2.0, Ec=0.001.",
+    results: "Entropy Components at Re=5.0: Higher total entropy than alumina - Ns ≈ 1.05 vs 0.85 for Al₂O₃ (24% higher) at upper wall. Fluid friction contributes 50%, magnetic 46%, heat transfer 4% - similar ratios to alumina but larger absolute values due to enhanced properties. Copper's superior electrical conductivity (σ_Cu = 58×10⁶ S/m) amplifies N₃ via A₂_Cu ≈ 2.8. Magnetic contribution more prominent than in alumina despite similar percentage. All components show exponential growth with η, confirming velocity gradient dominance near moving wall. Bejan Number vs Re: Similar trend to alumina but slightly higher baseline - Be increases from 0.005 (Re=0.1) to 0.43 (Re=5.0). Range notation: 'Be in [0.0001, 0.4300]' indicates heat transfer irreversibility reaches 43% at Re=5.0, higher than Al₂O₃'s 32%. Enhanced thermal conductivity (A₃_Cu = 1.40) improves heat transfer, increasing N₁ contribution. Log-Log Scaling: Power law Ns ∝ Re^2.07, slightly steeper than alumina's Re^1.97. Exponent > 2 suggests additional nonlinear coupling between electromagnetic and thermal effects in copper. Copper's high A₂ creates stronger magnetothermal feedback loop."
+  },
+
+  // ========================================================================
+  // 8. EFFECT OF NANOPARTICLE VOLUME FRACTION
+  // ========================================================================
+  'Phi_Al_Vel.png': {
+    title: "Alumina Nanofluid: Velocity and Temperature Evolution with Volume Fraction",
+    description: "Systematic study of nanoparticle loading effects (φ = 0.010 to 0.100) on flow and thermal profiles for Al₂O₃ at Re=1.0, Ha=2.0, Ec=0.001.",
+    results: "Velocity: Increasing φ reduces velocity by ~12% (W decreases from 0.86 to 0.76 at η=1) due to viscosity enhancement via Brinkman model: μ_nf/μ_f = 1/(1-φ)^2.5. Profiles maintain linear shape but rotate downward with higher φ. Zoom shows 8.5% velocity reduction near upper plate (η≈0.9). Temperature: φ has dual effect - higher thermal conductivity (A₃↑) improves heat removal, but higher viscosity (A₁↑) increases friction heating. Net result: θ_max increases 62% from φ=0.010 (θ≈0.0027) to φ=0.100 (θ≈0.0045). Zoom reveals mid-channel temperature varies 2.6×10⁻³ to 3.1×10⁻³. Optimal φ ≈ 0.04-0.06 balances heat transfer and pressure drop."
+  },
+  'Phi_Cu_Vel.png': {
+    title: "Copper Nanofluid: Velocity and Temperature Evolution with Volume Fraction",
+    description: "Systematic study of nanoparticle loading effects (φ = 0.010 to 0.100) on flow and thermal profiles for Cu nanofluid at Re=1.0, Ha=2.0, Ec=0.001.",
+    results: "Velocity: More pronounced φ sensitivity than alumina - velocity reduces by 14.3% (W drops from 0.83 to 0.71 at η=1) vs 12% for Al₂O₃. Copper's stronger viscosity enhancement via Brinkman correlation: at φ=0.10, A₁_Cu = 1.28 vs A₁_Al = 1.16. Velocity zoom shows clearer separation between curves near upper plate (η≈0.89-0.90), with 11% reduction from φ=0.010 to φ=0.100. Temperature: Exhibits 73% increase with φ - θ_max rises from 0.0031 (φ=0.010) to 0.0054 (φ=0.100), significantly higher than alumina's 62% increase. Enhanced heating from two sources: (1) viscous dissipation via high A₁, (2) Joule heating via superior A₂. Temperature zoom reveals mid-channel values span 3.08×10⁻³ to 3.16×10⁻³. Peak temperatures shift slightly toward upper plate with increasing φ. Design implication: Cu nanofluids at φ > 0.08 face thermal management challenges due to combined viscous and electromagnetic heating - require higher Bi or lower Ha."
+  },
+  'Phi_Al_Be.png': {
+    title: "Alumina Nanofluid: Entropy and Bejan Profiles vs Volume Fraction",
+    description: "Effect of nanoparticle concentration (φ = 0.010 to 0.100) on entropy generation and Bejan number for Al₂O₃ at Re=1.0, Ha=2.0.",
+    results: "Entropy Generation: Minimal dependence on φ - profiles nearly collapse for all concentrations. Ns increases slightly from 0.0315 (φ=0.010) to 0.0325 (φ=0.100), only 3.2% variation. Indicates entropy dominated by flow parameters (Ha, Re, Ec) rather than nanofluid properties. Bejan Number: Strong φ sensitivity - Be_avg decreases from 0.0151 (φ=0.010) to 0.0076 (φ=0.100). Higher φ increases viscosity (A₁↑) and thermal conductivity (A₃↑), shifting dominance from heat transfer to friction. Zoom inset shows Be varies 0.005-0.015 in mid-channel (η=0.1-0.6). Critical finding: φ > 0.05 makes friction/magnetic irreversibility dominant (Be → 0)."
+  },
+  'Phi_Cu_Be.png': {
+    title: "Copper Nanofluid: Entropy and Bejan Profiles vs Volume Fraction",
+    description: "Effect of nanoparticle concentration (φ = 0.010 to 0.100) on entropy generation and Bejan number for Cu nanofluid at Re=1.0, Ha=2.0.",
+    results: "Entropy Generation: Shows stronger φ dependence than alumina - Ns increases from 0.034 (φ=0.010) to 0.045 (φ=0.100), a 32% rise compared to 3.2% for Al₂O₃. Copper's high electrical conductivity (A₂_Cu) amplifies magnetic contribution: N₃ = A₂·Pr·Ec·Ha²·W² increases significantly with φ. Entropy profiles diverge more than alumina, indicating stronger coupling between nanoparticle concentration and electromagnetic effects. Bejan Number: Extremely low across all φ values - Be_avg ranges from 0.0053 to 0.0056 (near zero). Zoom inset shows Be ≈ 0.0052-0.0056 in mid-channel, confirming friction/magnetic irreversibility dominates completely (Be << 0.5). Copper's superior conductivity shifts irreversibility from heat transfer to Joule heating. Critical finding: At φ > 0.046, Cu nanofluids are friction/magnetic dominated regardless of operating conditions - heat transfer contributes < 1% to total entropy."
+  },
+  'Phi_Al_Cu_Vel.png': {
+    title: "Comparative Study: Cu vs Al₂O₃ Velocity Profiles at Extreme Concentrations",
+    description: "Direct comparison of copper and alumina nanofluids at minimum (φ=0.010) and maximum (φ=0.100) volume fractions showing nanoparticle type effects.",
+    results: "Minimum φ (1%): Cu and Al₂O₃ profiles nearly identical - maximum difference < 2% due to small property enhancements at low φ. Both approach base fluid behavior (A₁≈1.01, A₃≈1.01). Maximum φ (10%): Significant divergence - Cu velocity is 4.3% lower than Al₂O₃ at η=1 due to higher viscosity enhancement (A₁_Cu = 1.28 vs A₁_Al = 1.16). Copper's superior electrical conductivity increases magnetic damping via A₂. Velocity difference increases with η, peaking at upper plate. Key insight: At high φ, nanoparticle type matters - Cu provides better heat transfer (high A₃) but increases pressure drop (high A₁)."
   }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-
-// CUSTOM COMPONENTS (Continued...)
-
 // CUSTOM COMPONENTS
-
 // ═══════════════════════════════════════════════════════════════════════════
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -2049,7 +2143,9 @@ const FlowVisualization = ({ params, solution }) => {
           x: Math.random() * (width / 2),
           y: Math.random() * (height / 2),
           size: 1.5 + Math.random() * 2.5,
-          alpha: 0.4 + Math.random() * 0.5
+          alpha: 0.4 + Math.random() * 0.5,
+          stuckToLowerWall: false,
+          wallTimer: 0
         });
       }
     }
@@ -2085,6 +2181,10 @@ const FlowVisualization = ({ params, solution }) => {
       ctx.setLineDash([]);
       
       // Update and draw particles with temperature-based colors
+      const LOWER_WALL_STICK = 15;   // Lower wall no-slip zone
+      const UPPER_WALL_ZONE = 15;    // Upper wall zone for slip effects
+      const STICK_DURATION = 100;    // How long particles stick at lower wall
+      
       particlesRef.current.forEach((p) => {
         // Get temperature at this y-position
         const temp = getTemperatureAtY(p.y, height / 2, solution.Theta);
@@ -2092,29 +2192,101 @@ const FlowVisualization = ({ params, solution }) => {
         // Calculate velocity at this y-position
         const velocity = getVelocityAtY(p.y, height / 2, solution.W) || 0;
         
-        // Update position based on velocity profile
-        p.x += velocity * 0.6 + 0.3;
+        // ═══════════════════════════════════════════════════════════
+        // LOWER WALL: ALWAYS NO-SLIP (W(0) = 0)
+        // Particles STICK because velocity is ZERO at wall
+        // ═══════════════════════════════════════════════════════════
+        if (p.y <= LOWER_WALL_STICK) {
+          if (!p.stuckToLowerWall) {
+            p.stuckToLowerWall = true;
+            p.wallTimer = 0;
+            p.y = 8;  // Pin to lower wall
+          }
+          p.wallTimer++;
+          
+          if (p.wallTimer > STICK_DURATION) {
+            p.stuckToLowerWall = false;
+            p.y = LOWER_WALL_STICK + 20;
+            p.wallTimer = 0;
+          }
+          // Particle is STUCK - no horizontal movement (W=0)
+        }
         
+        // ═══════════════════════════════════════════════════════════
+        // UPPER WALL: SLIP DEPENDS ON λ (W(1) = Re + λ·W'(1))
+        // ═══════════════════════════════════════════════════════════
+        else if (p.y >= (height / 2 - UPPER_WALL_ZONE)) {
+          // λ = 0: No-slip → W(1) = Re (particles move WITH plate at full speed)
+          // λ > 0: Slip → W(1) = Re + λ·W'(1) (particles slip, move slower)
+          
+          if (params.lambda < 0.01) {
+            // NO-SLIP: λ=0 → Fluid moves WITH the plate
+            // Particles should move at FULL VELOCITY
+            p.stuckToLowerWall = false;
+            p.x += velocity * 0.6 + 0.3;
+          } else {
+            // SLIP: λ>0 → Fluid slips relative to plate
+            // Larger λ → MORE slip → SLOWER movement
+            // Physics: W(1) = Re + λ·W'(1) where W'(1) < 0 (negative gradient)
+            // So larger λ reduces W(1) below Re
+            const slipReduction = Math.min(params.lambda * 1.5, 0.7);
+            const slipFactor = 1.0 - slipReduction;
+            p.x += velocity * slipFactor * 0.6 + 0.3;
+          }
+        }
+        
+        // ═══════════════════════════════════════════════════════════
+        // BULK FLOW: Normal velocity profile
+        // ═══════════════════════════════════════════════════════════
+        else {
+          p.stuckToLowerWall = false;
+          p.x += velocity * 0.6 + 0.3;
+        }
+        
+        // Wrap around
         if (p.x > width / 2) {
           p.x = 0;
           p.y = Math.random() * (height / 2);
+          p.stuckToLowerWall = false;
+          p.wallTimer = 0;
         }
         
         // Get color based on temperature
         const color = getTemperatureColor(temp, tempRange.min, tempRange.max);
         
+        // Make stuck particles MORE VISIBLE (only lower wall)
+        const displaySize = p.stuckToLowerWall ? p.size * 2.5 : p.size;
+        const displayAlpha = p.stuckToLowerWall ? 1.0 : p.alpha;
+        
         // Draw particle with temperature color
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = color.replace(')', `, ${p.alpha})`).replace('hsl', 'hsla');
+        ctx.arc(p.x, p.y, displaySize, 0, Math.PI * 2);
+        ctx.fillStyle = color.replace(')', `, ${displayAlpha})`).replace('hsl', 'hsla');
         ctx.fill();
         
+        // BRIGHT RING for stuck particles (lower wall only)
+        if (p.stuckToLowerWall) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, displaySize + 3, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(255, 0, 110, 1.0)';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+          
+          // Pulsing glow
+          const pulse = Math.sin(p.wallTimer * 0.1) * 0.5 + 0.5;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, displaySize + 8, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(255, 0, 110, ${pulse * 0.6})`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+        
         // Glow effect matching temperature
-        const glowGradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 4);
-        glowGradient.addColorStop(0, color.replace(')', `, ${p.alpha * 0.4})`).replace('hsl', 'hsla'));
+        const glowGradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, displaySize * 4);
+        glowGradient.addColorStop(0, color.replace(')', `, ${displayAlpha * 0.4})`).replace('hsl', 'hsla'));
         glowGradient.addColorStop(1, 'transparent');
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * 4, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, displaySize * 4, 0, Math.PI * 2);
         ctx.fillStyle = glowGradient;
         ctx.fill();
       });
