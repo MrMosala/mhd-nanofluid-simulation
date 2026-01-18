@@ -3056,7 +3056,7 @@ const GridConvergencePanel = ({ params }) => {
         
         <ul>
           <li><strong>p ≈ 2:</strong> ✅ 2nd-order accuracy (interior central differences dominate)</li>
-          <li><strong>p ≈ 1:</strong> ✅ 1st-order accuracy (boundary conditions dominate) - This is your case!</li>
+          <li><strong>p ≈ 1:</strong> ✅ 1st-order accuracy (boundary conditions dominate)</li>
           <li><strong>0.9 {'<'} p {'<'} 1.8:</strong> ✅ Expected for FDM with 1st-order boundaries</li>
           <li><strong>p {'>'} 2:</strong> Excellent! May occur in very smooth regions</li>
           <li><strong>p {'<'} 0.9:</strong> ⚠️ Check implementation or increase tolerance</li>
