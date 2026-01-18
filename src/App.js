@@ -2145,6 +2145,7 @@ const FlowVisualization = ({ params, solution }) => {
           size: 1.5 + Math.random() * 2.5,
           alpha: 0.4 + Math.random() * 0.5,
           stuckToLowerWall: false,
+          stuckToUpperWall: false,
           wallTimer: 0
         });
       }
@@ -2181,9 +2182,9 @@ const FlowVisualization = ({ params, solution }) => {
       ctx.setLineDash([]);
       
       // Update and draw particles with temperature-based colors
-      const LOWER_WALL_STICK = 15;   // Lower wall no-slip zone
-      const UPPER_WALL_ZONE = 15;    // Upper wall zone for slip effects
-      const STICK_DURATION = 100;    // How long particles stick at lower wall
+      const LOWER_WALL_STICK = 15;   // Distance from BOTTOM
+      const UPPER_WALL_STICK = 15;   // Distance from TOP
+      const STICK_DURATION = 100;    // How long particles stick
       
       particlesRef.current.forEach((p) => {
         // Get temperature at this y-position
@@ -2192,47 +2193,48 @@ const FlowVisualization = ({ params, solution }) => {
         // Calculate velocity at this y-position
         const velocity = getVelocityAtY(p.y, height / 2, solution.W) || 0;
         
+        // Calculate distances from walls
+        const distanceFromBottom = (height / 2) - p.y;  // Lower wall
+        const distanceFromTop = p.y;                     // Upper wall
+        
         // ═══════════════════════════════════════════════════════════
         // LOWER WALL: ALWAYS NO-SLIP (W(0) = 0)
-        // Particles STICK because velocity is ZERO at wall
         // ═══════════════════════════════════════════════════════════
-        if (p.y <= LOWER_WALL_STICK) {
+        if (distanceFromBottom <= LOWER_WALL_STICK) {
           if (!p.stuckToLowerWall) {
             p.stuckToLowerWall = true;
+            p.stuckToUpperWall = false;
             p.wallTimer = 0;
-            p.y = 8;  // Pin to lower wall
+            p.y = (height / 2) - 8;  // Pin near bottom
           }
           p.wallTimer++;
           
           if (p.wallTimer > STICK_DURATION) {
             p.stuckToLowerWall = false;
-            p.y = LOWER_WALL_STICK + 20;
+            p.y = (height / 2) - LOWER_WALL_STICK - 20;
             p.wallTimer = 0;
           }
-          // Particle is STUCK - no horizontal movement (W=0)
+          // Particle is STUCK - no movement
         }
         
         // ═══════════════════════════════════════════════════════════
-        // UPPER WALL: SLIP DEPENDS ON λ (W(1) = Re + λ·W'(1))
+        // UPPER WALL: NO-SLIP ONLY WHEN λ ≈ 0
         // ═══════════════════════════════════════════════════════════
-        else if (p.y >= (height / 2 - UPPER_WALL_ZONE)) {
-          // λ = 0: No-slip → W(1) = Re (particles move WITH plate at full speed)
-          // λ > 0: Slip → W(1) = Re + λ·W'(1) (particles slip, move slower)
-          
-          if (params.lambda < 0.01) {
-            // NO-SLIP: λ=0 → Fluid moves WITH the plate
-            // Particles should move at FULL VELOCITY
+        else if (distanceFromTop <= UPPER_WALL_STICK && params.lambda < 0.01) {
+          if (!p.stuckToUpperWall) {
+            p.stuckToUpperWall = true;
             p.stuckToLowerWall = false;
-            p.x += velocity * 0.6 + 0.3;
-          } else {
-            // SLIP: λ>0 → Fluid slips relative to plate
-            // Larger λ → MORE slip → SLOWER movement
-            // Physics: W(1) = Re + λ·W'(1) where W'(1) < 0 (negative gradient)
-            // So larger λ reduces W(1) below Re
-            const slipReduction = Math.min(params.lambda * 1.5, 0.7);
-            const slipFactor = 1.0 - slipReduction;
-            p.x += velocity * slipFactor * 0.6 + 0.3;
+            p.wallTimer = 0;
+            p.y = 8;  // Pin near top
           }
+          p.wallTimer++;
+          
+          if (p.wallTimer > STICK_DURATION) {
+            p.stuckToUpperWall = false;
+            p.y = UPPER_WALL_STICK + 20;
+            p.wallTimer = 0;
+          }
+          // Particle is STUCK - no movement
         }
         
         // ═══════════════════════════════════════════════════════════
@@ -2240,6 +2242,8 @@ const FlowVisualization = ({ params, solution }) => {
         // ═══════════════════════════════════════════════════════════
         else {
           p.stuckToLowerWall = false;
+          p.stuckToUpperWall = false;
+          p.wallTimer = 0;
           p.x += velocity * 0.6 + 0.3;
         }
         
@@ -2248,15 +2252,17 @@ const FlowVisualization = ({ params, solution }) => {
           p.x = 0;
           p.y = Math.random() * (height / 2);
           p.stuckToLowerWall = false;
+          p.stuckToUpperWall = false;
           p.wallTimer = 0;
         }
         
         // Get color based on temperature
         const color = getTemperatureColor(temp, tempRange.min, tempRange.max);
         
-        // Make stuck particles MORE VISIBLE (only lower wall)
-        const displaySize = p.stuckToLowerWall ? p.size * 2.5 : p.size;
-        const displayAlpha = p.stuckToLowerWall ? 1.0 : p.alpha;
+        // Show large size if stuck at either wall
+        const isStuck = p.stuckToLowerWall || p.stuckToUpperWall;
+        const displaySize = isStuck ? p.size * 2.5 : p.size;
+        const displayAlpha = isStuck ? 1.0 : p.alpha;
         
         // Draw particle with temperature color
         ctx.beginPath();
@@ -2264,11 +2270,12 @@ const FlowVisualization = ({ params, solution }) => {
         ctx.fillStyle = color.replace(')', `, ${displayAlpha})`).replace('hsl', 'hsla');
         ctx.fill();
         
-        // BRIGHT RING for stuck particles (lower wall only)
-        if (p.stuckToLowerWall) {
+        // BRIGHT RING for stuck particles
+        if (isStuck) {
           ctx.beginPath();
           ctx.arc(p.x, p.y, displaySize + 3, 0, Math.PI * 2);
-          ctx.strokeStyle = 'rgba(255, 0, 110, 1.0)';
+          // Pink for lower wall, cyan for upper wall
+          ctx.strokeStyle = p.stuckToLowerWall ? 'rgba(255, 0, 110, 1.0)' : 'rgba(0, 212, 255, 1.0)';
           ctx.lineWidth = 3;
           ctx.stroke();
           
@@ -2276,7 +2283,9 @@ const FlowVisualization = ({ params, solution }) => {
           const pulse = Math.sin(p.wallTimer * 0.1) * 0.5 + 0.5;
           ctx.beginPath();
           ctx.arc(p.x, p.y, displaySize + 8, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(255, 0, 110, ${pulse * 0.6})`;
+          ctx.strokeStyle = p.stuckToLowerWall 
+            ? `rgba(255, 0, 110, ${pulse * 0.6})`
+            : `rgba(0, 212, 255, ${pulse * 0.6})`;
           ctx.lineWidth = 2;
           ctx.stroke();
         }
