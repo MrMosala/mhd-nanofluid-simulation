@@ -1521,16 +1521,12 @@ const ThemeSwitcher = () => {
   };
   
   return (
-    <div className="theme-switcher">
-      <button className="theme-btn" onClick={toggleTheme}>
-        {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-        {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-      </button>
-    </div>
+    <button className="theme-btn" onClick={toggleTheme}>
+      {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+      {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+    </button>
   );
 };
-
-
 
 // 10. Language Switcher Component
 
@@ -1545,20 +1541,18 @@ const LanguageSwitcher = () => {
   };
   
   return (
-    <div className="language-switcher">
-      <select 
-        className="language-btn"
-        value={language}
-        onChange={(e) => setLanguage(e.target.value)}
-        style={{ padding: '0.25rem 0.5rem' }}
-      >
-        {Object.entries(languages).map(([code, lang]) => (
-          <option key={code} value={code}>
-            {lang.flag} {lang.name}
-          </option>
-        ))}
-      </select>
-    </div>
+    <select 
+      className="language-btn"
+      value={language}
+      onChange={(e) => setLanguage(e.target.value)}
+      style={{ padding: '0.25rem 0.5rem' }}
+    >
+      {Object.entries(languages).map(([code, lang]) => (
+        <option key={code} value={code}>
+          {lang.flag} {lang.name}
+        </option>
+      ))}
+    </select>
   );
 };
 
@@ -3056,7 +3050,7 @@ const GridConvergencePanel = ({ params }) => {
         
         <ul>
           <li><strong>p ≈ 2:</strong> ✅ 2nd-order accuracy (interior central differences dominate)</li>
-          <li><strong>p ≈ 1:</strong> ✅ 1st-order accuracy (boundary conditions dominate)</li>
+          <li><strong>p ≈ 1:</strong> ✅ 1st-order accuracy (boundary conditions dominate) - This is your case!</li>
           <li><strong>0.9 {'<'} p {'<'} 1.8:</strong> ✅ Expected for FDM with 1st-order boundaries</li>
           <li><strong>p {'>'} 2:</strong> Excellent! May occur in very smooth regions</li>
           <li><strong>p {'<'} 0.9:</strong> ⚠️ Check implementation or increase tolerance</li>
@@ -5406,69 +5400,72 @@ const renderValidation = () => (
 );
   return (
 
-    <ToastProvider>
-      <div className="app">
-        <ThemeSwitcher />
-        <LanguageSwitcher />
-        
-        <header className="header">
-          <div className="header-content">
-            <div className="logo-section">
-              <div className="logo-icon"><Zap size={24} /></div>
-              <div className="logo-text">
-                <h1>MHD Nanofluid Flow</h1>
-                <p>Couette Flow Simulation v2.1</p>
-              </div>
-            </div>
-            
-            <nav className="nav-tabs">
-              {[
-                { id: 'simulation', icon: Play, label: 'Simulation' },
-                { id: 'velocity', icon: Wind, label: 'Velocity' },
-                { id: 'temperature', icon: Thermometer, label: 'Temperature' },
-                { id: 'entropy', icon: BarChart3, label: 'Entropy' },
-                { id: 'ailab', icon: Brain, label: 'AI Lab' },
-                { id: 'videos', icon: Video, label: 'Videos' },
-                { id: 'figures', icon: Image, label: 'Figures' },
-                { id: 'theory', icon: BookOpen, label: 'Theory' },
-                { id: 'validation', icon: Award, label: 'Validation' }
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  className={`nav-tab ${activeTab === tab.id ? 'active' : ''}`}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  <tab.icon size={16} />
-                  <span className="tab-text">{tab.label}</span>
-                </button>
-              ))}
-            </nav>
+<ToastProvider>
+  <div className="app">
+    <header className="header">
+      <div className="header-content">
+        <div className="logo-section">
+          <div className="logo-icon"><Zap size={24} /></div>
+          <div className="logo-text">
+            <h1>MHD Nanofluid Flow</h1>
+            <p>Couette Flow Simulation v2.1</p>
           </div>
-        </header>
+        </div>
         
-        <main className="main-content">
-          {activeTab === 'simulation' && renderSimulation()}
-          {activeTab === 'velocity' && renderVelocity()}
-          {activeTab === 'temperature' && renderTemperature()}
-          {activeTab === 'entropy' && renderEntropy()}
-          {activeTab === 'ailab' && renderAILab()}
-          {activeTab === 'videos' && renderVideos()}
-          {activeTab === 'figures' && renderFigures()}
-          {activeTab === 'theory' && renderTheory()}
-          {activeTab === 'validation' && renderValidation()}
-        </main>
+        {/* SWITCHERS MOVED HERE - inside header-content */}
+        <div className="header-controls-container">
+          <ThemeSwitcher />
+          <LanguageSwitcher />
+        </div>
         
-        <FloatingControls />
-        
-        <footer className="footer">
-          <p>
-            <strong>Research:</strong> Thermal and Magnetohydrodynamic Analysis of Nanofluid Couette Flow<br/>
-            <strong>Candidate:</strong> Mr. S.I. Mosala | <strong>Supervisor:</strong> Prof. O.D. Makinde<br/>
-            Nelson Mandela University | January 2026 | Version 2.1
-          </p>
-        </footer>
+        <nav className="nav-tabs">
+          {[
+            { id: 'simulation', icon: Play, label: 'Simulation' },
+            { id: 'velocity', icon: Wind, label: 'Velocity' },
+            { id: 'temperature', icon: Thermometer, label: 'Temperature' },
+            { id: 'entropy', icon: BarChart3, label: 'Entropy' },
+            { id: 'ailab', icon: Brain, label: 'AI Lab' },
+            { id: 'videos', icon: Video, label: 'Videos' },
+            { id: 'figures', icon: Image, label: 'Figures' },
+            { id: 'theory', icon: BookOpen, label: 'Theory' },
+            { id: 'validation', icon: Award, label: 'Validation' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              className={`nav-tab ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              <tab.icon size={16} />
+              <span className="tab-text">{tab.label}</span>
+            </button>
+          ))}
+        </nav>
       </div>
-    </ToastProvider>
+    </header>
+    
+    <main className="main-content">
+      {activeTab === 'simulation' && renderSimulation()}
+      {activeTab === 'velocity' && renderVelocity()}
+      {activeTab === 'temperature' && renderTemperature()}
+      {activeTab === 'entropy' && renderEntropy()}
+      {activeTab === 'ailab' && renderAILab()}
+      {activeTab === 'videos' && renderVideos()}
+      {activeTab === 'figures' && renderFigures()}
+      {activeTab === 'theory' && renderTheory()}
+      {activeTab === 'validation' && renderValidation()}
+    </main>
+    
+    <FloatingControls />
+    
+    <footer className="footer">
+      <p>
+        <strong>Research:</strong> Thermal and Magnetohydrodynamic Analysis of Nanofluid Couette Flow<br/>
+        <strong>Candidate:</strong> Mr. S.I. Mosala | <strong>Supervisor:</strong> Prof. O.D. Makinde<br/>
+        Nelson Mandela University | January 2026 | Version 2.1
+      </p>
+    </footer>
+  </div>
+</ToastProvider>
   );
 }
 

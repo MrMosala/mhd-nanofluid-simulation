@@ -1245,6 +1245,47 @@ input[type="range"].smooth-slider::-moz-range-thumb:active {
   }
 }
 
+/* ADD THIS anywhere in your CSS file (around line 1177) */
+.header-controls-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+  padding-right: 1rem;
+}
+
+.language-switcher, .theme-switcher {
+  display: inline-block;
+}
+
+.header .theme-btn,
+.header .language-btn {
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 20px;
+  padding: 0.5rem 1rem;
+  color: var(--accent-cyan);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.header .language-btn {
+  background: rgba(157, 78, 221, 0.1);
+  border: 1px solid rgba(157, 78, 221, 0.3);
+  color: var(--accent-magenta);
+}
+
+.theme-btn:hover,
+.language-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
 @media (max-width: 480px) {
   .equation-card {
     padding: var(--space-sm);
@@ -1937,9 +1978,6 @@ input[type="range"].smooth-slider::-moz-range-thumb:active {
 /* Language Switcher - Desktop */
 
 .language-switcher {
-  position: fixed;
-  top: 55px;  
-  right: 20px;
   z-index: 101;
 }
 
@@ -1965,11 +2003,10 @@ input[type="range"].smooth-slider::-moz-range-thumb:active {
 
 /* Theme Switcher - Desktop */
 .theme-switcher {
-  position: fixed;
-  top: 55px;
-  right: 180px;
   z-index: 101;
 }
+
+
 
 .theme-btn {
   background: var(--bg-tertiary);
