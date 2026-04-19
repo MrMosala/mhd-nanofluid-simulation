@@ -5641,7 +5641,7 @@ const renderValidation = () => (
     <footer className="footer">
       <p>
         <strong>Research:</strong> Thermal and Magnetohydrodynamic Analysis of Nanofluid Couette Flow<br/>
-        <strong>Candidate:</strong> Mr. S.I. Mosala | <strong>Supervisor:</strong> Prof. O.D. Makinde<br/>
+        <strong>Candidate:</strong> Mr. S.I. Mosala | <strong>Supervisors:</strong> Prof. O.D. Makinde &amp; Prof. A. Muronga<br/>
         Nelson Mandela University | January 2026 | Version 2.1
       </p>
     </footer>
