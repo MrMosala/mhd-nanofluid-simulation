@@ -532,6 +532,63 @@ return {
 };
 }
 
+// =============================================================================
+// BLOCK 1: LATIN HYPERCUBE SAMPLING FUNCTION
+// Location: Paste this AFTER the solveMHDCouetteFlow function and BEFORE
+//           the computeNanofluidProperties function (around line 290 in App.jsx)
+// =============================================================================
+
+/**
+ * Latin Hypercube Sampling
+ * Generates n samples across k parameters with better space coverage than
+ * random sampling. Each parameter interval [min, max] is divided into n
+ * equal strata and exactly one sample is drawn from each stratum.
+ *
+ * @param {number} n - number of samples (e.g. 1000)
+ * @param {Object} bounds - { paramName: [min, max], ... }
+ * @returns {Array} - array of n objects, each with all parameter values
+ */
+function latinHypercubeSample(n, bounds) {
+  const paramNames = Object.keys(bounds);
+
+  // Step 1: For each parameter, create n strata and sample one point per stratum
+  const samples = {};
+  paramNames.forEach(param => {
+    const [min, max] = bounds[param];
+    const range = max - min;
+    const strata = [];
+
+    for (let i = 0; i < n; i++) {
+      // Random point within stratum i
+      const lower = i / n;
+      const upper = (i + 1) / n;
+      const u = lower + Math.random() * (upper - lower);
+      strata.push(min + u * range);
+    }
+
+    // Step 2: Shuffle the strata randomly (Fisher-Yates)
+    for (let i = strata.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [strata[i], strata[j]] = [strata[j], strata[i]];
+    }
+
+    samples[param] = strata;
+  });
+
+  // Step 3: Combine into array of parameter objects
+  const result = [];
+  for (let i = 0; i < n; i++) {
+    const point = {};
+    paramNames.forEach(param => {
+      point[param] = samples[param][i];
+    });
+    result.push(point);
+  }
+
+  return result;
+}
+
+
 // ═══════════════════════════════════════════════════════════════════════════
 // NANOFLUID PROPERTIES CALCULATOR
 // Based on Proposal_Master.pdf Table 1 (page 5)
@@ -3320,6 +3377,15 @@ function App() {
   const [nnPrediction, setNnPrediction] = useState(null);
   const [aiRecommendations, setAiRecommendations] = useState([]);
   
+  // =============================================================================
+  // BLOCK 2: TWO NEW STATE VARIABLES
+  // Location: Inside the App() function, paste these AFTER the existing
+  //           useState declarations (after the aiRecommendations state, ~line 890)
+  // =============================================================================
+
+  const [mlSweepRunning, setMlSweepRunning] = useState(false);
+  const [mlSweepProgress, setMlSweepProgress] = useState({ current: 0, total: 0, nanofluid: '' });
+
     useEffect(() => {
     if (useNanofluid) {
       const props = computeNanofluidProperties(volumeFraction, nanoparticleType);
@@ -3613,6 +3679,139 @@ function App() {
   };
   
 
+  // =============================================================================
+  // BLOCK 3: generateMLDataset FUNCTION
+  // Location: Inside the App() function, paste this AFTER the exportCSV function
+  //           and BEFORE the copyParams function (around line 950 in App.jsx)
+  // =============================================================================
+
+  /**
+   * Generate ML-ready parametric sweep dataset using Latin Hypercube Sampling.
+   * Runs n simulations across all 7 parameters and exports a CSV file.
+   *
+   * @param {string} nanoparticleType - 'Cu' or 'Al2O3'
+   * @param {number} n - number of simulations (default 1000)
+   */
+  const generateMLDataset = useCallback(async (nanoparticleType = 'Cu', n = 1000) => {
+    setMlSweepRunning(true);
+    setMlSweepProgress({ current: 0, total: n, nanofluid: nanoparticleType });
+
+    // Parameter bounds for LHS
+    const bounds = {
+      Ha:     [0.0, 8.0],
+      Re:     [0.5, 4.0],
+      Ec:     [0.0, 0.10],
+      Bi:     [0.1, 5.0],
+      lambda: [0.0, 0.5],
+      G:      [0.0, 2.0],
+      phi:    [0.0, 0.10]
+    };
+
+    // Generate LHS samples
+    const lhsSamples = latinHypercubeSample(n, bounds);
+
+    // CSV header
+    const headers = [
+      'Ha', 'Re', 'Ec', 'Bi', 'lambda', 'G', 'phi',
+      'A1', 'A2', 'A3',
+      'Cf_lower', 'Cf_upper',
+      'Nu_lower', 'Nu_upper',
+      'Ns_avg', 'Be_avg',
+      'maxW', 'maxTheta',
+      'nanoparticle'
+    ];
+
+    const rows = [];
+    const CHUNK_SIZE = 50; // Process 50 simulations then yield to UI
+
+    for (let i = 0; i < n; i++) {
+      const sample = lhsSamples[i];
+
+      // Compute nanofluid property ratios A1, A2, A3 from phi
+      let A1, A2, A3;
+      try {
+        const nfProps = computeNanofluidProperties(sample.phi, nanoparticleType);
+        A1 = nfProps.A1;
+        A2 = nfProps.A2;
+        A3 = nfProps.A3;
+      } catch (e) {
+        // If phi=0 exactly, use base fluid
+        A1 = 1.0; A2 = 1.0; A3 = 1.0;
+      }
+
+      // Run FDM solver with this parameter combination
+      try {
+        const sol = solveMHDCouetteFlow({
+          Ha: sample.Ha,
+          Re: sample.Re,
+          Ec: sample.Ec,
+          Bi: sample.Bi,
+          lambda: sample.lambda,
+          G: sample.G,
+          Pr: 6.2,       // Fixed: water Prandtl number
+          A1, A2, A3,
+          N: 50          // Reduced grid for speed (N=50 sufficient for ML training)
+        });
+
+        rows.push([
+          sample.Ha.toFixed(6),
+          sample.Re.toFixed(6),
+          sample.Ec.toFixed(6),
+          sample.Bi.toFixed(6),
+          sample.lambda.toFixed(6),
+          sample.G.toFixed(6),
+          sample.phi.toFixed(6),
+          A1.toFixed(6),
+          A2.toFixed(6),
+          A3.toFixed(6),
+          sol.Cf_lower.toFixed(8),
+          sol.Cf_upper.toFixed(8),
+          sol.Nu_lower.toFixed(8),
+          sol.Nu_upper.toFixed(8),
+          sol.avgNs.toFixed(8),
+          sol.avgBe.toFixed(8),
+          sol.maxW.toFixed(8),
+          sol.maxTheta.toFixed(8),
+          nanoparticleType
+        ].join(','));
+
+      } catch (e) {
+        // Skip failed simulations (rare edge cases at extreme parameters)
+        console.warn(`Simulation ${i} failed:`, e.message);
+      }
+
+      // Update progress every simulation
+      setMlSweepProgress({ current: i + 1, total: n, nanofluid: nanoparticleType });
+
+      // Yield to UI every CHUNK_SIZE simulations to prevent browser freeze
+      if ((i + 1) % CHUNK_SIZE === 0) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    }
+
+    // Build and download CSV
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+
+    const filename = nanoparticleType === 'Cu'
+      ? 'Cu_Water_ML_dataset.csv'
+      : 'Al2O3_Water_ML_dataset.csv';
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    showToast(
+      `${filename} exported! ${rows.length} simulations completed.`,
+      'success'
+    );
+
+    setMlSweepRunning(false);
+    setMlSweepProgress({ current: 0, total: 0, nanofluid: '' });
+  }, [showToast]);
+
 
   // Copy parameters to clipboard
 
@@ -3687,6 +3886,99 @@ const FloatingControls = () => (
             <button className="action-btn" onClick={exportCSV}>
               <Download size={16} /> Export CSV Data
             </button>
+
+            {/* ============================================================================= */}
+            {/* BLOCK 4: TWO NEW BUTTONS IN QUICK ACTIONS */}
+            {/* PASTE this block immediately AFTER the existing Export CSV button. */}
+            {/* ============================================================================= */}
+
+                <div style={{
+                  marginTop: '0.5rem',
+                  padding: '0.75rem',
+                  background: 'rgba(0,212,255,0.05)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(0,212,255,0.15)'
+                }}>
+                  <div style={{
+                    fontSize: '0.75rem',
+                    color: 'var(--accent-cyan)',
+                    fontWeight: '600',
+                    marginBottom: '0.5rem',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em'
+                  }}>
+                    ML Dataset Generator (LHS · 1000 simulations)
+                  </div>
+
+                  {mlSweepRunning && (
+                    <div style={{ marginBottom: '0.5rem' }}>
+                      <div style={{
+                        background: 'rgba(255,255,255,0.1)',
+                        borderRadius: '4px',
+                        overflow: 'hidden',
+                        height: '6px',
+                        marginBottom: '0.25rem'
+                      }}>
+                        <div style={{
+                          height: '100%',
+                          width: `${(mlSweepProgress.current / mlSweepProgress.total) * 100}%`,
+                          background: 'linear-gradient(90deg, var(--accent-cyan), var(--accent-emerald))',
+                          transition: 'width 0.3s ease',
+                          borderRadius: '4px'
+                        }} />
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                        {mlSweepProgress.nanofluid} — {mlSweepProgress.current} / {mlSweepProgress.total} simulations
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      className="action-btn"
+                      onClick={() => generateMLDataset('Cu', 1000)}
+                      disabled={mlSweepRunning}
+                      style={{
+                        flex: 1,
+                        background: mlSweepRunning
+                          ? 'rgba(255,255,255,0.05)'
+                          : 'rgba(212,165,116,0.15)',
+                        borderColor: 'rgba(212,165,116,0.4)',
+                        opacity: mlSweepRunning ? 0.5 : 1
+                      }}
+                      title="Generate 1000-simulation ML dataset for Cu-Water nanofluid"
+                    >
+                      {mlSweepRunning && mlSweepProgress.nanofluid === 'Cu'
+                        ? <><div className="spinner"></div> Running...</>
+                        : <><Download size={14} /> Cu-Water</>
+                      }
+                    </button>
+
+                    <button
+                      className="action-btn"
+                      onClick={() => generateMLDataset('Al2O3', 1000)}
+                      disabled={mlSweepRunning}
+                      style={{
+                        flex: 1,
+                        background: mlSweepRunning
+                          ? 'rgba(255,255,255,0.05)'
+                          : 'rgba(200,200,200,0.15)',
+                        borderColor: 'rgba(200,200,200,0.4)',
+                        opacity: mlSweepRunning ? 0.5 : 1
+                      }}
+                      title="Generate 1000-simulation ML dataset for Al₂O₃-Water nanofluid"
+                    >
+                      {mlSweepRunning && mlSweepProgress.nanofluid === 'Al2O3'
+                        ? <><div className="spinner"></div> Running...</>
+                        : <><Download size={14} /> Al₂O₃-Water</>
+                      }
+                    </button>
+                  </div>
+                </div>
+            {/* ============================================================================= */}
+            {/* END OF BLOCK 4 */}
+            {/* ============================================================================= */}
+
             <button className="action-btn" onClick={copyParams}>
               {copied ? <Check size={16} /> : <Copy size={16} />}
               {copied ? 'Copied!' : 'Copy Parameters'}
@@ -4613,11 +4905,11 @@ const renderEntropy = () => (
               Q = (N₂ + N₃)/N₁
           </div>
         <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>
-            • <strong>Be &gt; 0.5</strong> (Q &lt; 1): Heat transfer irreversibility dominates
-            <br />
-            • <strong>Be &lt; 0.5</strong> (Q &gt; 1): Friction + magnetic irreversibility dominates
-            <br />
-            • <strong>Be = 0.5</strong> (Q = 1): Equal contribution
+          • <strong>Be &gt; 0.5</strong> (Q &lt; 1): Heat transfer irreversibility dominates
+          <br />
+          • <strong>Be &lt; 0.5</strong> (Q &gt; 1): Friction + magnetic irreversibility dominates
+          <br />
+          • <strong>Be = 0.5</strong> (Q = 1): Equal contribution
         </p>
       </div>
       
@@ -4914,11 +5206,11 @@ const renderAILab = () => (
                   <td>{leader.params.Pr?.toFixed(2)}</td>
                   <td className="date">
                     {new Date(leader.created_at).toLocaleDateString()}
-                  </td>
-                </tr>
+                   </td>
+                 </tr>
               ))}
             </tbody>
-          </table>
+           </table>
         </div>
       )}
     </div>
@@ -4969,7 +5261,7 @@ const renderAILab = () => (
       </div>
       <p className="ai-description">
         Uses evolutionary algorithms to find optimal parameter combinations. Select your optimization goal
-        and let the algorithm evolve solutions over 40 generations. The optimizer respects the 
+        and let the algorithm evolve solutions over 40 generations. The optimizer respects the
         <strong> physical constraints</strong> of the modified boundary conditions.
       </p>
       
