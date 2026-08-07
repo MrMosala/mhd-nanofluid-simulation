@@ -8,7 +8,7 @@ import {
   X, ChevronDown, Wind, TrendingUp, Brain, Target,
   Cpu, Download, Copy, Check, Sparkles, FlaskConical,
   GitCompare, Lightbulb, Rocket, Award, Settings,
-  Upload, AlertTriangle,
+  Upload, AlertTriangle, 
   Moon, Sun, BarChart2, ChevronLeft, ChevronRight, HelpCircle
 } from 'lucide-react';
 import { useSteadySimulations } from './hooks/useSteadySimulations';
@@ -168,39 +168,6 @@ function analyticalCase4(params) {
 }
 
 /**
- * General Case: Full MHD with Pressure (Ha≠0, Ec=0, G≠0)
- * Analytical velocity, numerical temperature required
- */
-// eslint-disable-next-line no-unused-vars
-function analyticalGeneralMomentum(params) {
-  const { A1, A2, Re, Ha, G, lambda, N = 100 } = params;
-  const h = 1.0 / N;
-  const eta = [];
-  const W = [];
-  
-  // α = Ha·√(A₂/A₁)
-  const alpha = Ha * Math.sqrt(A2 / A1);
-  
-  // C₁ = -G/(A₂·Ha²)
-  const C1 = -G / (A2 * Ha * Ha);
-  
-  // C₂ = [Re + (G/(A₂·Ha²))·[λ·α·sinh(α) - 1 + cosh(α)]] / [sinh(α) + λ·α·cosh(α)]
-  const numerator = Re + (G / (A2 * Ha * Ha)) * (lambda * alpha * Math.sinh(alpha) - 1 + Math.cosh(alpha));
-  const denominator = Math.sinh(alpha) + lambda * alpha * Math.cosh(alpha);
-  const C2 = numerator / denominator;
-  
-  // W(η) = C₁·cosh(α·η) + C₂·sinh(α·η) + G/(A₂·Ha²)
-  
-  for (let i = 0; i <= N; i++) {
-    const eta_val = i * h;
-    eta.push(eta_val);
-    W.push(C1 * Math.cosh(alpha * eta_val) + C2 * Math.sinh(alpha * eta_val) + G / (A2 * Ha * Ha));
-  }
-  
-  return { eta, W, caseName: "General Case: MHD + Pressure (Ha≠0, G≠0)" };
-}
-
-/**
  * Compute L∞ and L² errors between numerical and analytical solutions
  */
 function computeErrors(numerical, analytical) {
@@ -231,6 +198,16 @@ function computeErrors(numerical, analytical) {
     L2_Theta: l2ErrorTheta
   };
 }
+
+// Direction of wall heat flux from the SIGNED Nusselt number.
+// Nu < 0: heat flows from the internally-heated fluid into the wall (wall absorbs).
+// Nu > 0: heat flows from the wall into the fluid (wall releases).
+const nuDirection = (nu) => (nu < 0 ? 'heat: fluid → wall' : nu > 0 ? 'heat: wall → fluid' : 'no flux');
+
+// Community "auto-save each solve to Supabase" is DISABLED for the presentation
+// build so the app never writes to the live database during a demo. Reads
+// (stats/leaderboard) still work. Set to true to re-enable crowd-sourced collection.
+const ENABLE_COMMUNITY_AUTOSAVE = false;
 
 /**
  * Grid Convergence Study
@@ -409,7 +386,6 @@ function solveMHDCouetteFlow(params) {
     Theta = Theta_new;
     
     if (maxDiff < tol) {
-      console.log(`✅ MHD Solver converged in ${iter + 1} iterations`);
       break;
     }
   }
@@ -437,8 +413,11 @@ function solveMHDCouetteFlow(params) {
   // ──────────────────────────────────────────────────────────────
   const Cf_lower = A1 * Wp_final[0];
   const Cf_upper = A1 * Wp_final[N];
-  const Nu_lower = Math.abs(-A3 * Thetap_final[0]);
-  const Nu_upper = Math.abs(-A3 * Thetap_final[N]);
+  // Nu is a SIGNED quantity: Nu = -A3·θ'|_{η=0,1}. A negative Nu
+  // means heat flux into the wall (e.g. Nu(0) sign reversal at high Re). Do NOT
+  // wrap in Math.abs() — consumers that want magnitude apply their own abs().
+  const Nu_lower = -A3 * Thetap_final[0];
+  const Nu_upper = -A3 * Thetap_final[N];
   
 // ──────────────────────────────────────────────────────────────
 // STEP 7: Calculate entropy generation (Eq 3.8 from proposal)
@@ -531,12 +510,6 @@ return {
     params: { ...params }
 };
 }
-
-// =============================================================================
-// BLOCK 1: LATIN HYPERCUBE SAMPLING FUNCTION
-// Location: Paste this AFTER the solveMHDCouetteFlow function and BEFORE
-//           the computeNanofluidProperties function (around line 290 in App.jsx)
-// =============================================================================
 
 /**
  * Latin Hypercube Sampling
@@ -697,95 +670,66 @@ function computeNanofluidProperties(phi, nanoparticleType) {
 // MACHINE LEARNING ENGINE
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Neural Network for instant predictions
+// ═══════════════════════════════════════════════════════════════════════════
+// REAL ML SURROGATE: scikit-learn MLPRegressor (exported from the ML training pipeline)
+// (Code_Original/mhd_ml_pipeline.py). Weights/scalers live in
+// public/mlp_model.json and are loaded at runtime. Forward pass validated
+// against Python sample_predictions.csv to < 5e-9 relative error.
+//
+// Pipeline (must match training EXACTLY):
+//   scale X → dense layers (relu hidden, identity output) → inverse-scale y
+//   → sign-preserving expm1 on the log-transformed output columns.
+// Inputs  (11): Ha, Re, Ec, Bi, lambda, G, phi, A1, A2, A3, fluid_code
+// Outputs  (9): Cf_lower, Cf_upper, Nu_lower, Nu_upper, Ns_max, Ns_avg,
+//               Be_avg, maxW, maxTheta
+// ═══════════════════════════════════════════════════════════════════════════
 
-class SimpleNeuralNetwork {
-  predict(inputs) {
-    const Ha = inputs.Ha || 2;
-    const Re = inputs.Re || 1;
-    const Pr = inputs.Pr || 6.2;
-    const Ec = inputs.Ec || 0.01;
-    const Bi = inputs.Bi || 0.5;
-    const A1 = inputs.A1 || 1.2;
-    const A2 = inputs.A2 || 1.5;
-    const A3 = inputs.A3 || 1.3;
-    const lambda = inputs.lambda || 0.1;
-    const G = inputs.G || 0.5;
-    
-    // ═══════════════════════════════════════════════════════════════
-    // EMPIRICALLY CALIBRATED NEURAL NETWORK
-    // Fitted to FDM results with target error < 15%
-    // ═══════════════════════════════════════════════════════════════
-    
-    // Effective parameters
-    const Ha_eff = Math.sqrt(A2) * Ha;
-    const magnetic_factor = 1 / (1 + 0.05 * Ha_eff * Ha_eff);
-    
-    // ─────────────────────────────────────────────────────────────
-    // SKIN FRICTION (Cf) - Empirical fit
-    // ─────────────────────────────────────────────────────────────
-    const slip_factor = 1 / (1 + 0.5 * lambda);
-    const Re_contribution = Re * slip_factor * magnetic_factor;
-    const pressure_contribution = 0.2 * G;
-    
-    const Cf_pred = A1 * (Re_contribution + pressure_contribution) * 0.75;
-    
-    // ─────────────────────────────────────────────────────────────
-    // NUSSELT NUMBER (Nu) - Empirical fit with heating sources
-    // ─────────────────────────────────────────────────────────────
-    const base_Nu = A3 * Bi / (1 + Bi);
-    
-    // Heating contributions (properly scaled)
-    const Re_sq = Re * Re / ((1 + lambda) * (1 + lambda));
-    const viscous_term = A1 * Pr * Ec * Re_sq;
-    const joule_term = A2 * Pr * Ec * Ha * Ha * Re_sq * magnetic_factor;
-    
-    const heating_enhancement = 1 + 2.5 * (viscous_term + joule_term);
-    
-    const Nu_pred = base_Nu * heating_enhancement;
-    
-    // ─────────────────────────────────────────────────────────────
-    // ENTROPY GENERATION (Ns) - Component-based
-    // ─────────────────────────────────────────────────────────────
-    const theta_gradient_sq = Math.pow(Bi / (1 + Bi), 2);
-    const Ns_heat = A3 * theta_gradient_sq;
-    
-    const velocity_gradient_sq = Re_sq * magnetic_factor;
-    const Ns_friction = A1 * Pr * Ec * velocity_gradient_sq * 0.5;
-    
-    const Ns_magnetic = A2 * Pr * Ec * Ha * Ha * Re_sq * magnetic_factor * magnetic_factor * 0.3;
-    
-    const Ns_pred = Ns_heat + Ns_friction + Ns_magnetic;
-    
-    // ─────────────────────────────────────────────────────────────
-    // MAXIMUM VELOCITY (maxW) - Conservative estimate
-    // ─────────────────────────────────────────────────────────────
-    const base_velocity = Re / (1 + lambda);
-    const pressure_boost = G / (A2 * Ha * Ha + 0.5);
-    
-    const maxW_pred = (base_velocity + pressure_boost) * (0.85 + 0.15 * magnetic_factor);
-    
-    // ─────────────────────────────────────────────────────────────
-    // CONFIDENCE - More conservative
-    // ─────────────────────────────────────────────────────────────
-    const param_deviations = [
-      Math.abs(Ha - 2) / 10,
-      Math.abs(Re - 1.5) / 5,
-      Math.abs(Pr - 6.2) / 20,
-      Math.abs(Ec - 0.01) / 0.2
-    ];
-    
-    const max_deviation = Math.max(...param_deviations);
-    const confidence_base = 0.78 - max_deviation * 0.15;
-    
-    return {
-      Cf_lower: Cf_pred,
-      Nu_lower: Nu_pred,
-      avgNs: Ns_pred,
-      maxW: maxW_pred,
-      confidence: Math.max(0.65, Math.min(0.85, confidence_base))
-    };
+// Raw forward pass over the exported network. xRaw is in input_cols order.
+function mlpForward(model, xRaw) {
+  let a = xRaw.map((v, i) => (v - model.x_mean[i]) / model.x_scale[i]);
+  const L = model.coefs.length;
+  for (let l = 0; l < L; l++) {
+    const W = model.coefs[l];
+    const b = model.intercepts[l];
+    const inDim = W.length;
+    const outDim = b.length;
+    const z = new Array(outDim);
+    for (let j = 0; j < outDim; j++) {
+      let s = b[j];
+      for (let i = 0; i < inDim; i++) s += a[i] * W[i][j];
+      z[j] = s;
+    }
+    if (l < L - 1) {
+      // hidden-layer activation
+      a = model.activation === 'tanh' ? z.map(v => Math.tanh(v))
+        : model.activation === 'logistic' ? z.map(v => 1 / (1 + Math.exp(-v)))
+        : z.map(v => Math.max(0, v)); // relu (default)
+    } else {
+      // output activation
+      a = model.out_activation === 'relu' ? z.map(v => Math.max(0, v)) : z; // identity default
+    }
   }
+  let y = a.map((v, i) => v * model.y_scale[i] + model.y_mean[i]);
+  for (const idx of model.log_col_indices) {
+    y[idx] = Math.sign(y[idx]) * Math.expm1(Math.abs(y[idx])); // inverse of sign*log1p
+  }
+  return y;
+}
+
+// Predict the 9 engineering outputs for the given parameters using the loaded
+// MLP surrogate. Returns null until the model JSON has loaded.
+function mlpPredict(model, params, phi, fluidCode) {
+  if (!model) return null;
+  const feat = {
+    Ha: params.Ha, Re: params.Re, Ec: params.Ec, Bi: params.Bi,
+    lambda: params.lambda, G: params.G, phi,
+    A1: params.A1, A2: params.A2, A3: params.A3, fluid_code: fluidCode
+  };
+  const xRaw = model.input_cols.map(c => feat[c]);
+  const y = mlpForward(model, xRaw);
+  const out = {};
+  model.output_cols.forEach((c, i) => { out[c] = y[i]; });
+  return out;
 }
 
 
@@ -908,35 +852,8 @@ class GeneticOptimizer {
 // NEW FEATURES - ADDED COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════
 
-// 1. Toast Notification System
-
-const ToastContext = React.createContext();
-
-const ToastProvider = ({ children }) => {
-  const [toasts, setToasts] = useState([]);
-  
-  const showToast = useCallback((message, type = 'info', duration = 3000) => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, message, type }]);
-    
-    setTimeout(() => {
-      setToasts(prev => prev.filter(toast => toast.id !== id));
-    }, duration);
-  }, []);
-  
-  return (
-    <ToastContext.Provider value={showToast}>
-      {children}
-      <div className="toast-container">
-        {toasts.map(toast => (
-          <div key={toast.id} className={`toast ${toast.type}`}>
-            {toast.message}
-          </div>
-        ))}
-      </div>
-    </ToastContext.Provider>
-  );
-};
+// (Toast notifications are handled with local state inside App; see showToast
+// and the .toast-container rendered in App's JSX.)
 
 
 
@@ -1166,17 +1083,11 @@ const PerformanceBenchmark = ({ solution, nanofluidProps, useNanofluid }) => {
       Ns: 0.045,
       description: 'Copper nanoparticles enhance heat transfer'
     },
-    'Al₂O₃-Water (5% φ)': { 
-      Nu: 1.18, 
+    'Al₂O₃-Water (5% φ)': {
+      Nu: 1.18,
       Cf: 1.12,
       Ns: 0.042,
       description: 'Alumina nanoparticles - balanced properties'
-    },
-    'TiO₂-Water (5% φ)': { 
-      Nu: 1.15, 
-      Cf: 1.10,
-      Ns: 0.040,
-      description: 'Titanium dioxide - good stability'
     }
   }), []);
   
@@ -1281,14 +1192,15 @@ const StateManagement = ({ params, setParams, showToast }) => {
   const fileInputRef = useRef(null);
   
   const saveState = useCallback(() => {
+    const sol = solveMHDCouetteFlow(params);
     const state = {
       params,
       timestamp: new Date().toISOString(),
       version: '3.5',
       results: {
-        Cf_lower: solveMHDCouetteFlow(params).Cf_lower,
-        Nu_lower: solveMHDCouetteFlow(params).Nu_lower,
-        avgNs: solveMHDCouetteFlow(params).avgNs
+        Cf_lower: sol.Cf_lower,
+        Nu_lower: sol.Nu_lower,
+        avgNs: sol.avgNs
       }
     };
     
@@ -1585,34 +1497,6 @@ const ThemeSwitcher = () => {
   );
 };
 
-// 10. Language Switcher Component
-
-const LanguageSwitcher = () => {
-  const [language, setLanguage] = useState('en');
-  
-  const languages = {
-    en: { name: 'English', flag: '🇬🇧' },
-    es: { name: 'Español', flag: '🇪🇸' },
-    fr: { name: 'Français', flag: '🇫🇷' },
-    zh: { name: '中文', flag: '🇨🇳' }
-  };
-  
-  return (
-    <select 
-      className="language-btn"
-      value={language}
-      onChange={(e) => setLanguage(e.target.value)}
-      style={{ padding: '0.25rem 0.5rem' }}
-    >
-      {Object.entries(languages).map(([code, lang]) => (
-        <option key={code} value={code}>
-          {lang.flag} {lang.name}
-        </option>
-      ))}
-    </select>
-  );
-};
-
 // ═══════════════════════════════════════════════════════════════════════════
 
 // PARAMETER PRESETS & FIGURE DATA
@@ -1621,24 +1505,27 @@ const LanguageSwitcher = () => {
 
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Derive the coefficient ratios (A1, A2, A3) straight from the Maxwell/Brinkman
+// models so presets stay consistent with computeNanofluidProperties (single
+// source of truth). Nanofluid presets use φ=0.05 (matches the default volume
+// fraction and the 5% φ benchmark labels).
+const presetCoefficients = (phi, type) => {
+  const { A1, A2, A3 } = computeNanofluidProperties(phi, type);
+  return { A1, A2, A3 };
+};
+
 const PARAMETER_PRESETS = {
   'cu-water': {
     name: 'Cu-Water Nanofluid',
     description: 'Copper nanoparticles in water - High thermal conductivity',
     icon: '🟤',
-    params: { A1: 1.25, A2: 1.8, A3: 1.4, Re: 1.0, Ha: 2.0, Pr: 6.2, Ec: 0.01, Bi: 0.5, lambda: 0.1, G: 0.5 }
+    params: { ...presetCoefficients(0.05, 'Cu'), Re: 1.0, Ha: 2.0, Pr: 6.2, Ec: 0.01, Bi: 0.5, lambda: 0.1, G: 0.5 }
   },
   'al2o3-water': {
     name: 'Al₂O₃-Water Nanofluid',
     description: 'Alumina nanoparticles in water - Balanced properties',
     icon: '⚪',
-    params: { A1: 1.15, A2: 1.3, A3: 1.25, Re: 1.0, Ha: 2.0, Pr: 6.2, Ec: 0.01, Bi: 0.5, lambda: 0.1, G: 0.5 }
-  },
-  'tio2-water': {
-    name: 'TiO₂-Water Nanofluid',
-    description: 'Titanium dioxide in water - Good stability',
-    icon: '🔵',
-    params: { A1: 1.18, A2: 1.4, A3: 1.2, Re: 1.0, Ha: 2.0, Pr: 6.2, Ec: 0.01, Bi: 0.5, lambda: 0.1, G: 0.5 }
+    params: { ...presetCoefficients(0.05, 'Al2O3'), Re: 1.0, Ha: 2.0, Pr: 6.2, Ec: 0.01, Bi: 0.5, lambda: 0.1, G: 0.5 }
   },
   'base-fluid': {
     name: 'Pure Water (Base Fluid)',
@@ -1650,198 +1537,25 @@ const PARAMETER_PRESETS = {
     name: 'Strong Magnetic Field',
     description: 'Ha = 5 - Significant Lorentz damping',
     icon: '🧲',
-    params: { A1: 1.2, A2: 1.5, A3: 1.3, Re: 1.0, Ha: 5.0, Pr: 6.2, Ec: 0.01, Bi: 0.5, lambda: 0.1, G: 0.5 }
+    params: { ...presetCoefficients(0.05, 'Cu'), Re: 1.0, Ha: 5.0, Pr: 6.2, Ec: 0.01, Bi: 0.5, lambda: 0.1, G: 0.5 }
   },
   'high-dissipation': {
     name: 'High Viscous Dissipation',
     description: 'Ec = 0.1 - Strong heating effects',
     icon: '🔥',
-    params: { A1: 1.2, A2: 1.5, A3: 1.3, Re: 1.0, Ha: 2.0, Pr: 6.2, Ec: 0.1, Bi: 0.5, lambda: 0.1, G: 0.5 }
+    params: { ...presetCoefficients(0.05, 'Cu'), Re: 1.0, Ha: 2.0, Pr: 6.2, Ec: 0.1, Bi: 0.5, lambda: 0.1, G: 0.5 }
   },
   'high-convection': {
     name: 'Strong Convective Cooling',
     description: 'Bi = 3 - Enhanced heat removal at upper plate',
     icon: '❄️',
-    params: { A1: 1.2, A2: 1.5, A3: 1.3, Re: 1.0, Ha: 2.0, Pr: 6.2, Ec: 0.01, Bi: 3.0, lambda: 0.1, G: 0.5 }
+    params: { ...presetCoefficients(0.05, 'Cu'), Re: 1.0, Ha: 2.0, Pr: 6.2, Ec: 0.01, Bi: 3.0, lambda: 0.1, G: 0.5 }
   },
   'fast-flow': {
     name: 'High Reynolds Number',
     description: 'Re = 4 - Fast upper plate motion',
     icon: '💨',
-    params: { A1: 1.2, A2: 1.5, A3: 1.3, Re: 4.0, Ha: 2.0, Pr: 6.2, Ec: 0.01, Bi: 0.5, lambda: 0.1, G: 0.5 }
-  }
-};
-
-
-
-// ═══════════════════════════════════════════════════════════════════════════
-// FIGURE DATA
-// ═══════════════════════════════════════════════════════════════════════════
-
-
-// %NEW
-// %NEW - REORGANIZED BY PHYSICAL PARAMETER
-const FIGURE_DESCRIPTIONS = {
-  // ========================================================================
-  // 1. GRID CONVERGENCE STUDY
-  // ========================================================================
-  'Grid_Al_Cf_Nu_Spectral.png': {
-    title: "Alumina Nanofluid: Spectral Convergence Validation",
-    description: "Grid independence study for Al₂O₃ nanofluid showing convergence of skin friction (Cf) and Nusselt number (Nu) with increasing collocation points using SQLM.",
-    results: "Spectral accuracy achieved with minimum error = 0.0 at machine precision (~10⁻¹³). Skin friction converges to stable value at N=40 collocation points. Nusselt number shows excellent stability across all grid sizes (N=10 to N=60). Both quantities reach machine precision, confirming spectral exponential convergence of SQLM. This validates that N=50-60 points are sufficient for publication-quality results."
-  },
-  'Grid_Cu_Cf_Nu_Spectral.png': {
-    title: "Copper Nanofluid: Spectral Convergence Validation",
-    description: "Grid convergence study for Cu nanofluid demonstrating SQLM spectral accuracy for both skin friction and heat transfer coefficients.",
-    results: "Machine precision achieved (error = 0.0) with spectral convergence. Skin friction stabilizes at N=30 points with error ~10⁻¹⁴. Nusselt number shows minimal variation (~10⁻¹³ to 10⁻¹²) across all grid sizes, confirming excellent numerical stability. Copper nanofluid requires slightly fewer points than alumina for convergence due to smoother property variations. Both Cf and Nu reach plateau, validating mesh independence."
-  },
-  'Grid_Al_Cf_Nu_Entopy.png': {
-    title: "Alumina Nanofluid: Entropy Generation and Bejan Number (φ=0.070)",
-    description: "Complete thermodynamic analysis showing entropy generation components (heat transfer, fluid friction, magnetic) and Bejan number profiles for Al₂O₃ nanofluid at 7% volume fraction.",
-    results: "Total entropy Ns = 0.1989, with fluid friction dominating at 55.7%, followed by magnetic effects (39.8%) and heat transfer (4.5%). Average Bejan number Be_avg = 0.0910 indicates friction/magnetic irreversibility dominates (Be < 0.5). Entropy increases sharply near upper plate (η=1) due to velocity gradients and Joule heating. Bejan profile shows heat transfer contribution is highest at lower plate and decreases across the channel."
-  },
-  'Grid_Cu_Cf_Nu_Entopy.png': {
-    title: "Copper Nanofluid: Entropy Generation and Bejan Number (φ=0.070)",
-    description: "Thermodynamic analysis for Cu nanofluid showing entropy generation breakdown and Bejan number distribution at 7% volume fraction.",
-    results: "Total entropy Ns = 0.2403, higher than Al₂O₃ due to enhanced electrical conductivity. Fluid friction contributes 51.4%, magnetic effects 42.9%, and heat transfer 5.7%. Average Bejan number Be_avg = 0.1375, higher than alumina but still friction/magnetic dominated. Copper's superior electrical conductivity (σ_Cu = 58×10⁶ S/m) increases Joule heating contribution. Entropy profile shows similar trend to alumina but with 21% higher total generation."
-  },
-
-  // ========================================================================
-  // 2. ANALYTICAL VALIDATION
-  // ========================================================================
-  'Anal_Cu_Gen.png': {
-    title: "Analytical Validation: SQLM vs Exact Solutions (Cu Nanofluid)",
-    description: "Verification of numerical SQLM code against analytical solutions for four limiting cases: (1) Simple Couette, (2) MHD Couette, (3) Viscous Dissipation, (4) Pressure Gradient.",
-    results: "Case 1 (Ha=0, Ec=0, G=0): Linear velocity - SQLM matches analytical with max error 6.13×10⁻¹³, confirming machine precision for simple physics. Case 2 (Ha≠0, Ec=0, G=0): Hyperbolic velocity - max error 5.68×10⁻¹³ validates magnetic force implementation. Case 3 (Ha=0, Ec≠0, G=0): Viscous heating - max error 6.13×10⁻¹³ confirms energy equation accuracy. Case 4 (Ha=0, Ec=0, G≠0): Pressure-driven - max error 6.38×10⁻¹³ validates pressure gradient term. All errors < 10⁻¹², demonstrating spectral accuracy. SQLM (blue solid) and analytical (red dashed) curves are visually indistinguishable, proving code correctness before tackling full coupled problem."
-  },
-
-  // ========================================================================
-  // 3. EFFECT OF BIOT NUMBER
-  // ========================================================================
-  'Bi_Al_Temp.png': {
-    title: "Alumina Nanofluid: Biot Number Effects on Temperature Distribution",
-    description: "Analysis of convective cooling parameter (Bi = 0.01 to 10.0) impact on thermal field for Al₂O₃ at φ=0.070, Re=1.0, Ha=2.0, Ec=0.01.",
-    results: "Temperature Profiles: Increasing Bi from 0.01 to 10.0 reduces upper wall temperature θ(1) by 89% (from 0.058 to 0.006), demonstrating strong convective cooling. At low Bi (≈0.01), nearly adiabatic upper plate - temperature peaks at θ≈0.058. At high Bi (≈10), approaching isothermal boundary - θ(1)→0 as Bi→∞. Temperature curves shift downward systematically with Bi. Upper Wall Temperature: Exponential decay θ(1) vs Bi, with steepest drop at Bi = 0.01-1.0 (practical range). At Bi > 5, θ(1) < 0.01 (diminishing returns). Physical insight: Bi = Hh_f/k_f compares convective to conductive resistance - higher Bi means external cooling dominates."
-  },
-  'Bi_Cu_Temp.png': {
-    title: "Copper Nanofluid: Biot Number Effects on Temperature Distribution",
-    description: "Convective cooling analysis (Bi = 0.01 to 10.0) for Cu nanofluid, comparing thermal response with alumina nanofluid behavior.",
-    results: "Temperature Profiles: Similar Bi sensitivity to Al₂O₃ but higher baseline temperatures due to superior electrical conductivity (enhanced Joule heating). At Bi=0.01, θ_max = 0.066 for Cu vs 0.058 for Al₂O₃ (14% higher). Temperature reduction with Bi is 88% (from 0.066 to 0.008), slightly less effective than alumina due to higher internal heat generation. Upper Wall Temperature: Exponential decay with Bi, but θ(1) remains consistently higher than Al₂O₃ at all Bi values. Critical Bi ≈ 1.0 where cooling transitions from weak to strong. Copper's enhanced A₃ (1.40 vs 1.25) improves conduction, but high A₂ (2.8 vs 1.3) increases Joule heating: N₃ = A₂·Pr·Ec·Ha²·W². Design implication: Cu requires higher Bi or lower Ha for equivalent cooling."
-  },
-
-  // ========================================================================
-  // 4. EFFECT OF ECKERT NUMBER
-  // ========================================================================
-  'Ec_Al_Temp.png': {
-    title: "Alumina Nanofluid: Temperature Profiles vs Eckert Number",
-    description: "Viscous dissipation effects (Ec = 0 to 0.100) on temperature distribution for Al₂O₃ nanofluid with enhanced visualization at Ha=2.0, Pr=6.2, Bi=0.5.",
-    results: "Temperature rises dramatically with Ec due to friction heating: A₁·Pr·Ec·(W')². At Ec=0, θ_max ≈ 0.005 (conduction only). At Ec=0.100, θ_max ≈ 0.39 (78× increase), with peak shifting from η≈0.7 to η≈0.9. Note states 'Ec enhanced for visualization' - confirms viscous heating dominance at high Ec. Temperature profiles transition from concave (low Ec) to convex (high Ec) as internal generation overwhelms boundary cooling. All curves satisfy θ(0)=0 (isothermal lower) and dθ/dη(1)=-Bi·θ(1) (convective upper). Practical limit: Ec < 0.05 for thermal stability - above this, runaway heating possible in confined geometries."
-  },
-  'Ec_Cu_Temp.png': {
-    title: "Copper Nanofluid: Temperature Profiles vs Eckert Number",
-    description: "Viscous dissipation effects (Ec = 0 to 0.100) on thermal field for Cu nanofluid with enhanced visualization, compared with alumina behavior at Ha=2.0, Pr=6.2, Bi=0.5.",
-    results: "Temperature: Higher than Al₂O₃ at all Ec values due to combined viscous and Joule heating. At Ec=0.100, θ_max ≈ 0.45 vs 0.39 for alumina (15% higher). Copper's enhanced heating: N₂ ∝ A₁ (viscous) + N₃ ∝ A₂ (Joule), both higher for Cu. Temperature peak location shifts from η≈0.7 (Ec=0) to η≈0.95 (Ec=0.100), closer to moving wall than alumina. Note confirms 'Ec enhanced for visualization' - demonstrates extreme viscous dissipation regime. Temperature gradients at lower wall (dθ/dη|₀) steeper for copper → higher Nusselt numbers. Physical implication: Cu nanofluids excellent for heat transfer but require more aggressive cooling (higher Bi) to prevent overheating at high Ec. Design trade-off: Enhanced heat transfer vs increased thermal load."
-  },
-  'Ec_Al_Be.png': {
-    title: "Alumina Nanofluid: Entropy Analysis vs Eckert Number",
-    description: "Effect of viscous dissipation parameter (Ec = 0 to 0.100) on entropy generation components and Bejan number for Al₂O₃ at φ=0.080, Ha=2.0, Pr=6.2.",
-    results: "Entropy Generation Rate: Increases nonlinearly with Ec from Ns≈0.02 (Ec=0) to Ns≈3.2 (Ec=0.100), a 160× amplification. At Ec=0, only heat transfer contributes; at Ec=0.100, all three sources are significant. Peak entropy shifts from mid-channel (Ec=0) to upper wall (Ec=0.100) as friction heating dominates. Bejan Number: Dramatic transition - at Ec=0, Be≈0.6 (heat transfer dominates). At Ec=0.100, Be peaks at 0.57 near lower wall but drops to ~0.01 at upper wall (friction dominates). Bejan profiles show crossover at η≈0.4. Maximum Entropy vs Ec: Cubic growth - Ns_max = 0.06 + 315·Ec³, indicating strong nonlinearity. Critical Ec ≈ 0.05 where entropy doubles. Above Ec=0.08, system becomes thermodynamically inefficient."
-  },
-  'Ec_Cu_Be.png': {
-    title: "Copper Nanofluid: Entropy Analysis vs Eckert Number",
-    description: "Entropy generation breakdown and Bejan number evolution with viscous dissipation (Ec = 0 to 0.100) for Cu nanofluid at φ=0.080, Ha=2.0, Pr=6.2.",
-    results: "Entropy Generation Rate: Higher baseline than Al₂O₃ - at Ec=0.100, Ns_max ≈ 4.3 vs 3.2 for alumina (34% higher) due to enhanced Joule heating via A₂_Cu. Copper's superior conductivity amplifies magnetic contribution: N₃ ∝ A₂. Entropy profile at Ec=0.100 shows steeper gradient near upper wall compared to alumina. Bejan Number: At Ec=0, Be≈0.68 (higher than Al₂O₃'s 0.6) because copper's enhanced thermal conductivity (A₃↑) increases heat transfer irreversibility. At Ec=0.100, Be peaks at 0.68 then drops to ~0.01. Bejan transition is more gradual for copper across η. Maximum Entropy vs Ec: Cubic relationship with higher slope than alumina - Ns_max ≈ 0.09 + 420·Ec³. Critical Ec ≈ 0.04 for copper (lower than Al₂O₃'s 0.05) due to stronger magnetothermal coupling."
-  },
-
-  // ========================================================================
-  // 5. EFFECT OF HARTMANN NUMBER
-  // ========================================================================
-  'Ha_Al_Gen.png': {
-    title: "Alumina Nanofluid: Velocity-Temperature Evolution with Hartmann Number",
-    description: "Parametric study showing effect of magnetic field strength (Ha = 0 to 5.0) on velocity and temperature profiles for Al₂O₃ nanofluid at φ=0.070.",
-    results: "Velocity: Increasing Ha from 0 to 5 reduces maximum velocity by ~72% (from W≈0.93 to W≈0.70 at η=1) due to Lorentz force damping. Profiles transition from linear (Ha=0) to S-shaped curves with magnetic flattening in mid-channel. Temperature: Ha increases internal heating via Joule dissipation, with maximum temperature rising from θ≈0.017 (Ha=0) to θ≈0.083 (Ha=5), a 388% increase. Temperature peaks shift toward upper plate as Ha increases, indicating magnetic heating dominance near moving wall."
-  },
-  'Ha_Cu_Gen.png': {
-    title: "Copper Nanofluid: Velocity-Temperature Evolution with Hartmann Number",
-    description: "Magnetic field effects (Ha = 0 to 5.0) on flow and thermal characteristics for Cu nanofluid at φ=0.070, compared with alumina behavior.",
-    results: "Velocity: Similar damping trend to Al₂O₃, with 68% reduction from Ha=0 to Ha=5. Copper shows slightly faster velocity at Ha=5 (W≈0.68 vs 0.70 for Al₂O₃) due to higher viscosity (A₁_Cu > A₁_Al). Temperature: More pronounced heating than alumina - maximum θ≈0.084 at Ha=5, driven by superior electrical conductivity (A₂_Cu ≈ 2.5× A₂_Al). Copper's enhanced σ amplifies Joule heating: N₃ = A₂·Pr·Ec·Ha²·W². Temperature rise is 400% from Ha=0 to Ha=5, demonstrating strong magnetothermal coupling."
-  },
-  'Ha_Al_Ns.png': {
-    title: "Alumina Nanofluid: Entropy and Bejan Number vs Hartmann Number",
-    description: "Thermodynamic response to magnetic field: entropy generation rate and Bejan number profiles for varying Ha (0 to 5.0) in Al₂O₃ nanofluid.",
-    results: "Entropy Generation: Increases dramatically with Ha, from Ns≈0.08 (Ha=0) to Ns≈1.35 (Ha=5) at upper plate - a 16× amplification due to Joule heating. Peak entropy shifts from η≈0.9 to η≈1.0 as Ha increases. Bejan Number: At Ha=0, Be≈0.05 (friction dominated). At Ha=5, Be peaks at 0.85 near η=0.1 (heat transfer dominated locally), then drops to ~0.01 near upper plate where magnetic effects dominate. Transition from friction-dominated (low Ha) to magnetic-dominated (high Ha) irreversibility clearly demonstrated."
-  },
-  'Ha_Cu_Ns.png': {
-    title: "Copper Nanofluid: Entropy and Bejan Number vs Hartmann Number",
-    description: "Thermodynamic analysis showing entropy generation and irreversibility distribution for Cu nanofluid across magnetic field strengths.",
-    results: "Entropy Generation: Higher baseline than Al₂O₃ due to enhanced conductivity. At Ha=5, Ns_max ≈ 1.68 (25% higher than alumina). Copper's magnetic contribution dominates: N₃/Ns ≈ 43% vs 40% for Al₂O₃. Bejan Number: At Ha=5, Be peaks at 0.92 near lower plate (strongest heat transfer irreversibility), then crashes to ~0.01 at upper plate. Copper exhibits more extreme Bejan variation due to superior thermal-electrical coupling: Be_Cu,max / Be_Al,max ≈ 1.08. Critical finding: Cu nanofluids trade heat transfer enhancement for increased entropy - optimization required."
-  },
-
-  // ========================================================================
-  // 6. EFFECT OF SLIP PARAMETER
-  // ========================================================================
-  'Lamd_Al_Vel.png': {
-    title: "Alumina Nanofluid: Slip Parameter Effects on Velocity and Temperature",
-    description: "Investigation of Navier slip boundary condition (λ = 0 to 1.0) on flow profiles for Al₂O₃ nanofluid at Re=1.0, Ha=2.0, Ec=0.001.",
-    results: "Velocity: Slip dramatically increases velocity at upper plate - no-slip (λ=0) gives W(1)≈1.0, while λ=1.0 yields W(1)≈0.40 (60% reduction in wall velocity). Physical interpretation: λ=μ_f/(βH) where larger λ means weaker wall adhesion. Velocity profiles become increasingly linear as λ increases. Temperature: Slip reduces viscous heating - maximum θ drops from 0.0053 (λ=0) to 0.0008 (λ=1.0), an 85% decrease. Lower shear rates (dW/dη) at walls reduce friction heating: N₂ = A₁·Pr·Ec·(W')². Slip provides passive thermal management by reducing viscous dissipation."
-  },
-  'Lamd_Cu_Vel.png': {
-    title: "Copper Nanofluid: Slip Parameter Effects on Velocity and Temperature",
-    description: "Slip boundary condition analysis (λ = 0 to 1.0) for Cu nanofluid, showing enhanced thermal response compared to alumina.",
-    results: "Velocity: Similar slip behavior to Al₂O₃ - λ=1.0 reduces W(1) by 60%. Copper's higher viscosity (A₁_Cu = 1.25 vs 1.15 for Al₂O₃) slightly amplifies slip effects. Temperature: More sensitive to slip than alumina - θ_max drops from 0.0064 (λ=0) to 0.0009 (λ=1.0), a 86% reduction. Enhanced thermal response due to superior thermal conductivity (A₃_Cu = 1.4 vs 1.25). Copper shows stronger magnetothermal coupling: temperature at λ=0 is 21% higher than alumina due to Joule heating via high σ_Cu. Slip effectiveness: ∂θ/∂λ larger for copper, making slip control more critical for thermal management."
-  },
-
-  // ========================================================================
-  // 7. EFFECT OF REYNOLDS NUMBER
-  // ========================================================================
-  'Re_Al_Vel.png': {
-    title: "Alumina Nanofluid: Reynolds Number Effects on Velocity and Temperature",
-    description: "Parametric study of upper plate velocity (Re = 0.1 to 5.0) on flow and thermal profiles for Al₂O₃ nanofluid at φ=0.070, Ha=2.0, Ec=0.001.",
-    results: "Velocity Profiles: Linear scaling with Re - velocity at upper plate W(1) increases from 0.09 (Re=0.1) to 4.3 (Re=5.0), approximately proportional to Re as expected from boundary condition W(1) = Re - λ·W'(1). Profiles maintain similar shape (slightly concave due to magnetic damping) but magnitude scales linearly. At Re=5.0, significant deviation from pure Couette (dotted line) due to Lorentz force: Ha² = 4 provides substantial electromagnetic retardation. Velocity gradient dW/dη increases with Re, directly affecting skin friction: Cf = A₁·W'. Temperature Profiles: Dramatic increase with Re - θ_max rises from 0.002 (Re=0.1) to 0.10 (Re=5.0), a 50× amplification. Temperature scales approximately with Re² due to viscous heating: N₂ ∝ (W')². At Re=5.0, peak shifts toward upper plate (η≈0.9) where velocity gradients are highest. Convective cooling (Bi=0.5) becomes less effective at high Re as internal generation dominates. Critical Re ≈ 2.0-3.0 where thermal effects become significant (θ_max > 0.03)."
-  },
-  'Re_Cu_Vel.png': {
-    title: "Copper Nanofluid: Reynolds Number Effects on Velocity and Temperature",
-    description: "Upper plate velocity effects (Re = 0.1 to 5.0) on flow and thermal characteristics for Cu nanofluid at φ=0.070, Ha=2.0, Ec=0.001.",
-    results: "Velocity Profiles: Similar linear scaling to alumina - W(1) ranges from 0.09 (Re=0.1) to 4.1 (Re=5.0). Copper shows slightly lower velocities than Al₂O₃ at same Re due to higher viscosity: A₁_Cu = 1.25 > A₁_Al = 1.15. Magnetic damping effect more pronounced in copper due to enhanced electrical conductivity (A₂_Cu = 2.8), causing greater deviation from ideal Couette flow (dotted line). Velocity profiles more concave than alumina, indicating stronger Lorentz force retardation. Temperature Profiles: Significantly higher than alumina - θ_max reaches 0.115 (Re=5.0) vs 0.10 for Al₂O₃, a 15% increase despite identical parameters. Enhanced heating from dual sources: (1) Viscous: N₂ = A₁·Pr·Ec·(W')² with A₁_Cu > A₁_Al, (2) Joule: N₃ = A₂·Pr·Ec·Ha²·W² with A₂_Cu >> A₂_Al. Temperature at Re=5.0 peaks at η ≈ 0.88, slightly lower than alumina's η ≈ 0.90, indicating faster heat convection to upper boundary via enhanced A₃. Critical finding: Copper nanofluids generate 15-25% more internal heat than alumina at same operating conditions, requiring superior cooling strategies (higher Bi) or reduced Ha to prevent thermal runaway."
-  },
-  'Re_Al_Be.png': {
-    title: "Alumina Nanofluid: Entropy Analysis vs Reynolds Number",
-    description: "Effect of upper plate velocity (Re = 0.1 to 5.0) on entropy generation breakdown and Bejan number for Al₂O₃ at φ=0.070, Ha=2.0, Ec=0.001.",
-    results: "Entropy Components at Re=5.0: Total entropy Ns ≈ 0.85 at upper wall. Fluid friction (N₂, red) dominates with 48%, followed by magnetic (N₃, green) at 43%, and heat transfer (N₁, blue) at 9%. All three components increase exponentially with η, peaking at moving wall. Friction contribution: N₂ = A₁·Pr·Ec·(W')² scales with Re² since W' ∝ Re. Magnetic contribution: N₃ = A₂·Pr·Ec·Ha²·W² also scales with Re². Heat transfer remains relatively constant, causing Be to decrease with Re. Bejan Number vs Re: Monotonic increase from Be ≈ 0.005 (Re=0.1) to Be ≈ 0.32 (Re=5.0). Range notation: 'Be in [0.0001, 0.3224]' confirms heat transfer becomes more significant at higher Re. Physical interpretation: Faster flow increases temperature gradients (∂θ/∂η), boosting heat transfer irreversibility relative to friction. Log-Log Scaling: Perfect power-law fit Ns ∝ Re^1.97 ≈ Re², confirming quadratic dependence from (W')² and W² terms in entropy equation. Slope of 1.97 validates theoretical prediction and numerical accuracy."
-  },
-  'Re_Cu_Be.png': {
-    title: "Copper Nanofluid: Entropy Analysis vs Reynolds Number",
-    description: "Reynolds number effects (Re = 0.1 to 5.0) on entropy generation components and Bejan number for Cu nanofluid at φ=0.070, Ha=2.0, Ec=0.001.",
-    results: "Entropy Components at Re=5.0: Higher total entropy than alumina - Ns ≈ 1.05 vs 0.85 for Al₂O₃ (24% higher) at upper wall. Fluid friction contributes 50%, magnetic 46%, heat transfer 4% - similar ratios to alumina but larger absolute values due to enhanced properties. Copper's superior electrical conductivity (σ_Cu = 58×10⁶ S/m) amplifies N₃ via A₂_Cu ≈ 2.8. Magnetic contribution more prominent than in alumina despite similar percentage. All components show exponential growth with η, confirming velocity gradient dominance near moving wall. Bejan Number vs Re: Similar trend to alumina but slightly higher baseline - Be increases from 0.005 (Re=0.1) to 0.43 (Re=5.0). Range notation: 'Be in [0.0001, 0.4300]' indicates heat transfer irreversibility reaches 43% at Re=5.0, higher than Al₂O₃'s 32%. Enhanced thermal conductivity (A₃_Cu = 1.40) improves heat transfer, increasing N₁ contribution. Log-Log Scaling: Power law Ns ∝ Re^2.07, slightly steeper than alumina's Re^1.97. Exponent > 2 suggests additional nonlinear coupling between electromagnetic and thermal effects in copper. Copper's high A₂ creates stronger magnetothermal feedback loop."
-  },
-
-  // ========================================================================
-  // 8. EFFECT OF NANOPARTICLE VOLUME FRACTION
-  // ========================================================================
-  'Phi_Al_Vel.png': {
-    title: "Alumina Nanofluid: Velocity and Temperature Evolution with Volume Fraction",
-    description: "Systematic study of nanoparticle loading effects (φ = 0.010 to 0.100) on flow and thermal profiles for Al₂O₃ at Re=1.0, Ha=2.0, Ec=0.001.",
-    results: "Velocity: Increasing φ reduces velocity by ~12% (W decreases from 0.86 to 0.76 at η=1) due to viscosity enhancement via Brinkman model: μ_nf/μ_f = 1/(1-φ)^2.5. Profiles maintain linear shape but rotate downward with higher φ. Zoom shows 8.5% velocity reduction near upper plate (η≈0.9). Temperature: φ has dual effect - higher thermal conductivity (A₃↑) improves heat removal, but higher viscosity (A₁↑) increases friction heating. Net result: θ_max increases 62% from φ=0.010 (θ≈0.0027) to φ=0.100 (θ≈0.0045). Zoom reveals mid-channel temperature varies 2.6×10⁻³ to 3.1×10⁻³. Optimal φ ≈ 0.04-0.06 balances heat transfer and pressure drop."
-  },
-  'Phi_Cu_Vel.png': {
-    title: "Copper Nanofluid: Velocity and Temperature Evolution with Volume Fraction",
-    description: "Systematic study of nanoparticle loading effects (φ = 0.010 to 0.100) on flow and thermal profiles for Cu nanofluid at Re=1.0, Ha=2.0, Ec=0.001.",
-    results: "Velocity: More pronounced φ sensitivity than alumina - velocity reduces by 14.3% (W drops from 0.83 to 0.71 at η=1) vs 12% for Al₂O₃. Copper's stronger viscosity enhancement via Brinkman correlation: at φ=0.10, A₁_Cu = 1.28 vs A₁_Al = 1.16. Velocity zoom shows clearer separation between curves near upper plate (η≈0.89-0.90), with 11% reduction from φ=0.010 to φ=0.100. Temperature: Exhibits 73% increase with φ - θ_max rises from 0.0031 (φ=0.010) to 0.0054 (φ=0.100), significantly higher than alumina's 62% increase. Enhanced heating from two sources: (1) viscous dissipation via high A₁, (2) Joule heating via superior A₂. Temperature zoom reveals mid-channel values span 3.08×10⁻³ to 3.16×10⁻³. Peak temperatures shift slightly toward upper plate with increasing φ. Design implication: Cu nanofluids at φ > 0.08 face thermal management challenges due to combined viscous and electromagnetic heating - require higher Bi or lower Ha."
-  },
-  'Phi_Al_Be.png': {
-    title: "Alumina Nanofluid: Entropy and Bejan Profiles vs Volume Fraction",
-    description: "Effect of nanoparticle concentration (φ = 0.010 to 0.100) on entropy generation and Bejan number for Al₂O₃ at Re=1.0, Ha=2.0.",
-    results: "Entropy Generation: Minimal dependence on φ - profiles nearly collapse for all concentrations. Ns increases slightly from 0.0315 (φ=0.010) to 0.0325 (φ=0.100), only 3.2% variation. Indicates entropy dominated by flow parameters (Ha, Re, Ec) rather than nanofluid properties. Bejan Number: Strong φ sensitivity - Be_avg decreases from 0.0151 (φ=0.010) to 0.0076 (φ=0.100). Higher φ increases viscosity (A₁↑) and thermal conductivity (A₃↑), shifting dominance from heat transfer to friction. Zoom inset shows Be varies 0.005-0.015 in mid-channel (η=0.1-0.6). Critical finding: φ > 0.05 makes friction/magnetic irreversibility dominant (Be → 0)."
-  },
-  'Phi_Cu_Be.png': {
-    title: "Copper Nanofluid: Entropy and Bejan Profiles vs Volume Fraction",
-    description: "Effect of nanoparticle concentration (φ = 0.010 to 0.100) on entropy generation and Bejan number for Cu nanofluid at Re=1.0, Ha=2.0.",
-    results: "Entropy Generation: Shows stronger φ dependence than alumina - Ns increases from 0.034 (φ=0.010) to 0.045 (φ=0.100), a 32% rise compared to 3.2% for Al₂O₃. Copper's high electrical conductivity (A₂_Cu) amplifies magnetic contribution: N₃ = A₂·Pr·Ec·Ha²·W² increases significantly with φ. Entropy profiles diverge more than alumina, indicating stronger coupling between nanoparticle concentration and electromagnetic effects. Bejan Number: Extremely low across all φ values - Be_avg ranges from 0.0053 to 0.0056 (near zero). Zoom inset shows Be ≈ 0.0052-0.0056 in mid-channel, confirming friction/magnetic irreversibility dominates completely (Be << 0.5). Copper's superior conductivity shifts irreversibility from heat transfer to Joule heating. Critical finding: At φ > 0.046, Cu nanofluids are friction/magnetic dominated regardless of operating conditions - heat transfer contributes < 1% to total entropy."
-  },
-  'Phi_Al_Cu_Vel.png': {
-    title: "Comparative Study: Cu vs Al₂O₃ Velocity Profiles at Extreme Concentrations",
-    description: "Direct comparison of copper and alumina nanofluids at minimum (φ=0.010) and maximum (φ=0.100) volume fractions showing nanoparticle type effects.",
-    results: "Minimum φ (1%): Cu and Al₂O₃ profiles nearly identical - maximum difference < 2% due to small property enhancements at low φ. Both approach base fluid behavior (A₁≈1.01, A₃≈1.01). Maximum φ (10%): Significant divergence - Cu velocity is 4.3% lower than Al₂O₃ at η=1 due to higher viscosity enhancement (A₁_Cu = 1.28 vs A₁_Al = 1.16). Copper's superior electrical conductivity increases magnetic damping via A₂. Velocity difference increases with η, peaking at upper plate. Key insight: At high φ, nanoparticle type matters - Cu provides better heat transfer (high A₃) but increases pressure drop (high A₁)."
+    params: { ...presetCoefficients(0.05, 'Cu'), Re: 4.0, Ha: 2.0, Pr: 6.2, Ec: 0.01, Bi: 0.5, lambda: 0.1, G: 0.5 }
   }
 };
 
@@ -2208,18 +1922,32 @@ const FlowVisualization = ({ params, solution }) => {
       }
     }
     
+    let platePhase = 0;
+
     const animate = () => {
       // Clear with fade effect
       ctx.fillStyle = 'rgba(10, 14, 23, 0.12)';
       ctx.fillRect(0, 0, width / 2, height / 2);
-      
+
       // Draw plates
       const gradient1 = ctx.createLinearGradient(0, 0, width / 2, 0);
       gradient1.addColorStop(0, 'rgba(0, 212, 255, 0.6)');
       gradient1.addColorStop(1, 'rgba(0, 212, 255, 0.2)');
       ctx.fillStyle = gradient1;
       ctx.fillRect(0, 0, width / 2, 4);
-      
+
+      // Upper plate MOVES at speed ~Re: scroll ticks so the plate motion is
+      // visible. Under slip the top-row fluid lags these ticks (W(1) < Re).
+      platePhase = (platePhase + Math.max(0.1, params.Re * 0.9)) % 22;
+      ctx.strokeStyle = 'rgba(0, 212, 255, 0.85)';
+      ctx.lineWidth = 2;
+      for (let x = -22 + platePhase; x < width / 2; x += 22) {
+        ctx.beginPath();
+        ctx.moveTo(x, 5);
+        ctx.lineTo(x + 9, 10);
+        ctx.stroke();
+      }
+
       const gradient2 = ctx.createLinearGradient(0, 0, width / 2, 0);
       gradient2.addColorStop(0, 'rgba(255, 0, 110, 0.6)');
       gradient2.addColorStop(1, 'rgba(255, 0, 110, 0.2)');
@@ -2238,115 +1966,51 @@ const FlowVisualization = ({ params, solution }) => {
       }
       ctx.setLineDash([]);
       
-      // Update and draw particles with temperature-based colors
-      const LOWER_WALL_STICK = 15;   // Distance from BOTTOM
-      const UPPER_WALL_STICK = 15;   // Distance from TOP
-      const STICK_DURATION = 100;    // How long particles stick
-      
+      // Update and draw particles. Horizontal motion is driven by the ACTUAL
+      // local velocity W(eta) from the solver: fast near the moving upper wall,
+      // ~still near the stationary lower wall (no-slip, W(0)=0). Under slip
+      // (lambda>0) the top-row fluid moves slower than the plate ticks above,
+      // making the slip gap W(1)=Re-lambda*W'(1) < Re visible.
+      const SPEED_SCALE = 0.9;
+      const FLOOR = 0.04;          // tiny drift so near-stationary particles recycle
+      const WALL_BAND = 12;        // px band used to annotate the no-slip lower wall
+
       particlesRef.current.forEach((p) => {
-        // Get temperature at this y-position
         const temp = getTemperatureAtY(p.y, height / 2, solution.Theta);
-        
-        // Calculate velocity at this y-position
         const velocity = getVelocityAtY(p.y, height / 2, solution.W) || 0;
-        
-        // Calculate distances from walls
-        const distanceFromBottom = (height / 2) - p.y;  // Lower wall
-        const distanceFromTop = p.y;                     // Upper wall
-        
-        // ═══════════════════════════════════════════════════════════
-        // LOWER WALL: ALWAYS NO-SLIP (W(0) = 0)
-        // ═══════════════════════════════════════════════════════════
-        if (distanceFromBottom <= LOWER_WALL_STICK) {
-          if (!p.stuckToLowerWall) {
-            p.stuckToLowerWall = true;
-            p.stuckToUpperWall = false;
-            p.wallTimer = 0;
-            p.y = (height / 2) - 8;  // Pin near bottom
-          }
-          p.wallTimer++;
-          
-          if (p.wallTimer > STICK_DURATION) {
-            p.stuckToLowerWall = false;
-            p.y = (height / 2) - LOWER_WALL_STICK - 20;
-            p.wallTimer = 0;
-          }
-          // Particle is STUCK - no movement
-        }
-        
-        // ═══════════════════════════════════════════════════════════
-        // UPPER WALL: NO-SLIP ONLY WHEN λ ≈ 0
-        // ═══════════════════════════════════════════════════════════
-        else if (distanceFromTop <= UPPER_WALL_STICK && params.lambda < 0.01) {
-          if (!p.stuckToUpperWall) {
-            p.stuckToUpperWall = true;
-            p.stuckToLowerWall = false;
-            p.wallTimer = 0;
-            p.y = 8;  // Pin near top
-          }
-          p.wallTimer++;
-          
-          if (p.wallTimer > STICK_DURATION) {
-            p.stuckToUpperWall = false;
-            p.y = UPPER_WALL_STICK + 20;
-            p.wallTimer = 0;
-          }
-          // Particle is STUCK - no movement
-        }
-        
-        // ═══════════════════════════════════════════════════════════
-        // BULK FLOW: Normal velocity profile
-        // ═══════════════════════════════════════════════════════════
-        else {
-          p.stuckToLowerWall = false;
-          p.stuckToUpperWall = false;
-          p.wallTimer = 0;
-          p.x += velocity * 0.6 + 0.3;
-        }
-        
-        // Wrap around
+        const distanceFromBottom = (height / 2) - p.y;
+
+        // Advect at the real local velocity.
+        p.x += velocity * SPEED_SCALE + FLOOR;
+
+        // Recycle at the left edge when a particle leaves the frame.
         if (p.x > width / 2) {
           p.x = 0;
           p.y = Math.random() * (height / 2);
-          p.stuckToLowerWall = false;
-          p.stuckToUpperWall = false;
-          p.wallTimer = 0;
         }
-        
-        // Get color based on temperature
+
+        // Particles hugging the stationary lower wall (W~0) annotate the no-slip BC.
+        const nearLowerWall = distanceFromBottom <= WALL_BAND;
+
         const color = getTemperatureColor(temp, tempRange.min, tempRange.max);
-        
-        // Show large size if stuck at either wall
-        const isStuck = p.stuckToLowerWall || p.stuckToUpperWall;
-        const displaySize = isStuck ? p.size * 2.5 : p.size;
-        const displayAlpha = isStuck ? 1.0 : p.alpha;
-        
+        const displaySize = nearLowerWall ? p.size * 1.8 : p.size;
+        const displayAlpha = nearLowerWall ? 1.0 : p.alpha;
+
         // Draw particle with temperature color
         ctx.beginPath();
         ctx.arc(p.x, p.y, displaySize, 0, Math.PI * 2);
         ctx.fillStyle = color.replace(')', `, ${displayAlpha})`).replace('hsl', 'hsla');
         ctx.fill();
-        
-        // BRIGHT RING for stuck particles
-        if (isStuck) {
+
+        // Ring on no-slip wall particles to make the W(0)=0 condition visible.
+        if (nearLowerWall) {
           ctx.beginPath();
           ctx.arc(p.x, p.y, displaySize + 3, 0, Math.PI * 2);
-          // Pink for lower wall, cyan for upper wall
-          ctx.strokeStyle = p.stuckToLowerWall ? 'rgba(255, 0, 110, 1.0)' : 'rgba(0, 212, 255, 1.0)';
-          ctx.lineWidth = 3;
-          ctx.stroke();
-          
-          // Pulsing glow
-          const pulse = Math.sin(p.wallTimer * 0.1) * 0.5 + 0.5;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, displaySize + 8, 0, Math.PI * 2);
-          ctx.strokeStyle = p.stuckToLowerWall 
-            ? `rgba(255, 0, 110, ${pulse * 0.6})`
-            : `rgba(0, 212, 255, ${pulse * 0.6})`;
+          ctx.strokeStyle = 'rgba(255, 0, 110, 0.9)';
           ctx.lineWidth = 2;
           ctx.stroke();
         }
-        
+
         // Glow effect matching temperature
         const glowGradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, displaySize * 4);
         glowGradient.addColorStop(0, color.replace(')', `, ${displayAlpha * 0.4})`).replace('hsl', 'hsla'));
@@ -2359,11 +2023,12 @@ const FlowVisualization = ({ params, solution }) => {
       
       // Labels
       ctx.font = '12px Orbitron';
+      const W1 = solution.W[solution.W.length - 1];
       ctx.fillStyle = 'rgba(0, 212, 255, 0.9)';
-      ctx.fillText('Upper Plate (Moving) → Re = ' + params.Re.toFixed(1), 10, 22);
-      
+      ctx.fillText(`Upper Plate (moving, Re=${params.Re.toFixed(1)})  ·  fluid W(1)=${W1.toFixed(2)}`, 10, 22);
+
       ctx.fillStyle = 'rgba(255, 0, 110, 0.9)';
-      ctx.fillText('Lower Plate (Stationary)', 10, height / 2 - 12);
+      ctx.fillText('Lower Plate (stationary, no-slip W(0)=0)', 10, height / 2 - 12);
       
       ctx.fillStyle = 'rgba(255, 215, 0, 0.9)';
       ctx.textAlign = 'right';
@@ -2407,45 +2072,6 @@ const FlowVisualization = ({ params, solution }) => {
         <div className="legend-item">
           <div className="legend-color cold"></div>
           <span>Cold (θ ≈ {tempRange.min.toFixed(2)})</span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Figure Component
-
-const ResearchFigure = ({ filename, title, description, results }) => {
-  const [imageError, setImageError] = useState(false);
-  
-  return (
-    <div className="figure-card">
-      <div className="figure-image-container">
-        {imageError ? (
-          <div className="figure-placeholder">
-            <Image size={48} />
-            <p>{filename}</p>
-            <span className="figure-hint">Place image in public/images/ folder</span>
-          </div>
-        ) : (
-          <img 
-            src={`/images/${filename}`} 
-            alt={title}
-            onError={() => setImageError(true)}
-            className="figure-image"
-          />
-        )}
-      </div>
-      <div className="figure-content">
-        <div className="figure-header">
-          <h3>{title}</h3>
-          <span className="figure-filename">{filename}</span>
-        </div>
-        <div className="figure-description">
-          <p><strong>Description:</strong> {description}</p>
-        </div>
-        <div className="figure-results">
-          <p><strong>Key Results:</strong> {results}</p>
         </div>
       </div>
     </div>
@@ -2605,7 +2231,7 @@ const EnhancedComparisonPanel = ({
             <div className="results-compact">
               <div className="result-item">
                 <span>Nu (lower):</span>
-                <code className="emerald">{solutionA.Nu_lower.toFixed(4)}</code>
+                <code className="emerald">{solutionA.Nu_lower.toFixed(4)} (|Nu|={Math.abs(solutionA.Nu_lower).toFixed(4)})</code>
               </div>
               <div className="result-item">
                 <span>Cf (upper):</span>
@@ -2745,7 +2371,7 @@ const EnhancedComparisonPanel = ({
             <div className="results-compact">
               <div className="result-item">
                 <span>Nu (lower):</span>
-                <code className="emerald">{solutionB.Nu_lower.toFixed(4)}</code>
+                <code className="emerald">{solutionB.Nu_lower.toFixed(4)} (|Nu|={Math.abs(solutionB.Nu_lower).toFixed(4)})</code>
               </div>
               <div className="result-item">
                 <span>Cf (upper):</span>
@@ -2792,15 +2418,19 @@ const EnhancedComparisonPanel = ({
           )}
           
           <div className="difference-item">
-            <span className="diff-label">Heat Transfer Change:</span>
+            <span className="diff-label">Heat-transfer rate |Nu(lower)|:</span>
             <span className="diff-change">
-              Nu: {((solutionB.Nu_lower - solutionA.Nu_lower) / solutionA.Nu_lower * 100).toFixed(1)}%
-              <small className={solutionB.Nu_lower > solutionA.Nu_lower ? 'increase' : 'decrease'}>
-                ({solutionB.Nu_lower > solutionA.Nu_lower ? '↑ Better' : '↓ Reduced'} heat transfer)
+              {((Math.abs(solutionB.Nu_lower) - Math.abs(solutionA.Nu_lower)) / (Math.abs(solutionA.Nu_lower) || 1e-6) * 100).toFixed(1)}%
+              <small className={Math.abs(solutionB.Nu_lower) > Math.abs(solutionA.Nu_lower) ? 'increase' : 'decrease'}>
+                ({Math.abs(solutionB.Nu_lower) > Math.abs(solutionA.Nu_lower) ? '↑ Higher' : '↓ Lower'} rate)
               </small>
             </span>
           </div>
         </div>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.6rem' }}>
+          Nu is signed: the magnitude |Nu| is the heat-transfer rate, the sign is the direction
+          (Nu &lt; 0 means heat flows from the fluid into the wall).
+        </p>
       </div>
     </div>
   );
@@ -3185,7 +2815,7 @@ const GridConvergencePanel = ({ params }) => {
               <th>Mesh Spacing (h)</th>
               <th>L∞ Error</th>
               <th>Cf (lower)</th>
-              <th>Nu (lower)</th>
+              <th>Nu (lower, signed)</th>
             </tr>
           </thead>
           <tbody>
@@ -3377,12 +3007,7 @@ function App() {
   const [nnPrediction, setNnPrediction] = useState(null);
   const [aiRecommendations, setAiRecommendations] = useState([]);
   
-  // =============================================================================
-  // BLOCK 2: TWO NEW STATE VARIABLES
-  // Location: Inside the App() function, paste these AFTER the existing
-  //           useState declarations (after the aiRecommendations state, ~line 890)
-  // =============================================================================
-
+  // ML parametric-sweep (dataset generation) state
   const [mlSweepRunning, setMlSweepRunning] = useState(false);
   const [mlSweepProgress, setMlSweepProgress] = useState({ current: 0, total: 0, nanofluid: '' });
 
@@ -3447,21 +3072,41 @@ function App() {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [currentLeaderboard, setCurrentLeaderboard] = useState([]);
   
-  const neuralNetwork = useMemo(() => new SimpleNeuralNetwork(), []);
-  
-  const showToast = useCallback((message, type = 'info') => {
-    console.log(`[${type.toUpperCase()}]: ${message}`);
+  // Real ML surrogate (MLPRegressor) loaded from public/mlp_model.json at runtime.
+  const [mlpModel, setMlpModel] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${process.env.PUBLIC_URL}/mlp_model.json`)
+      .then(res => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then(json => { if (!cancelled) setMlpModel(json); })
+      .catch(err => console.error('Failed to load ML surrogate model:', err));
+    return () => { cancelled = true; };
   }, []);
-  
+
+  // Visible toast notifications (rendered in .toast-container below).
+  const [toasts, setToasts] = useState([]);
+  const showToast = useCallback((message, type = 'info', duration = 3000) => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, duration);
+  }, []);
+
 
   // Solutions
 
-  const solution = useMemo(() => {
-    const sol = solveMHDCouetteFlow(params);
-    setPreviousSolution(sol);
-    return sol;
-  }, [params]);
-  
+  const solution = useMemo(() => solveMHDCouetteFlow(params), [params]);
+
+  // Track the GENUINELY previous solution (not the current one) for trend arrows.
+  // Done in an effect so we never write state during render, and so
+  // AnalyticsDashboard compares current vs the prior solve.
+  const prevSolutionRef = useRef(null);
+  useEffect(() => {
+    setPreviousSolution(prevSolutionRef.current);
+    prevSolutionRef.current = solution;
+  }, [solution]);
+
   const compareSolution = useMemo(() => compareMode ? solveMHDCouetteFlow(compareParams) : null, [compareMode, compareParams]);
   
   const updateParam = useCallback((key, value) => {
@@ -3497,23 +3142,28 @@ function App() {
   }, [getTrainingStats]);
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ML FEATURES - AUTO-SAVE SIMULATIONS
+  // ML FEATURES - AUTO-SAVE SIMULATIONS (disabled for the presentation build)
+  // Gated behind ENABLE_COMMUNITY_AUTOSAVE (default false) so the app never
+  // writes to the live Supabase database during normal use. When enabled it is
+  // debounced (2s after the last change), never on every keystroke.
   // ═══════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    if (solution && solution.Cf_lower) {
-      saveSimulationForML(params, solution, optimizationGoal).then(() => {
-        console.log('✅ Simulation saved for ML training');
-      });
-    }
+    if (!ENABLE_COMMUNITY_AUTOSAVE) return;
+    if (!(solution && solution.Cf_lower)) return;
+    const timer = setTimeout(() => {
+      saveSimulationForML(params, solution, optimizationGoal);
+    }, 2000);
+    return () => clearTimeout(timer);
   }, [solution, params, optimizationGoal, saveSimulationForML]);
   
 
-  // Neural Network prediction
-
+  // ML surrogate prediction (real MLPRegressor). fluid_code: 0=Water, 1=Cu, 2=Al2O3.
   useEffect(() => {
-    const prediction = neuralNetwork.predict(params);
-    setNnPrediction(prediction);
-  }, [params, neuralNetwork]);
+    if (!mlpModel) return;
+    const fluidCode = useNanofluid ? (nanoparticleType === 'Cu' ? 1 : 2) : 0;
+    const phi = useNanofluid ? volumeFraction : 0;
+    setNnPrediction(mlpPredict(mlpModel, params, phi, fluidCode));
+  }, [params, mlpModel, useNanofluid, nanoparticleType, volumeFraction]);
   
 
 
@@ -3678,12 +3328,6 @@ function App() {
     showToast('CSV data exported successfully!', 'success');
   };
   
-
-  // =============================================================================
-  // BLOCK 3: generateMLDataset FUNCTION
-  // Location: Inside the App() function, paste this AFTER the exportCSV function
-  //           and BEFORE the copyParams function (around line 950 in App.jsx)
-  // =============================================================================
 
   /**
    * Generate ML-ready parametric sweep dataset using Latin Hypercube Sampling.
@@ -3887,11 +3531,7 @@ const FloatingControls = () => (
               <Download size={16} /> Export CSV Data
             </button>
 
-            {/* ============================================================================= */}
-            {/* BLOCK 4: TWO NEW BUTTONS IN QUICK ACTIONS */}
-            {/* PASTE this block immediately AFTER the existing Export CSV button. */}
-            {/* ============================================================================= */}
-
+            {/* ML dataset generation (parametric sweep → CSV) */}
                 <div style={{
                   marginTop: '0.5rem',
                   padding: '0.75rem',
@@ -3928,7 +3568,7 @@ const FloatingControls = () => (
                         }} />
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                        {mlSweepProgress.nanofluid} — {mlSweepProgress.current} / {mlSweepProgress.total} simulations
+                        {mlSweepProgress.nanofluid}: {mlSweepProgress.current} / {mlSweepProgress.total} simulations
                       </div>
                     </div>
                   )}
@@ -3975,9 +3615,6 @@ const FloatingControls = () => (
                     </button>
                   </div>
                 </div>
-            {/* ============================================================================= */}
-            {/* END OF BLOCK 4 */}
-            {/* ============================================================================= */}
 
             <button className="action-btn" onClick={copyParams}>
               {copied ? <Check size={16} /> : <Copy size={16} />}
@@ -3998,25 +3635,36 @@ const FloatingControls = () => (
 
   // Results Panel Component
 
-  const ResultsPanel = ({ sol = solution, label = '' }) => (
-    <div className="results-panel">
-      <div className="result-card cyan">
-        <div className="label">Cf (Lower){label}</div>
-        <div className="value">{sol.Cf_lower.toFixed(4)}</div>
+  const ResultsPanel = ({ sol = solution, label = '' } = {}) => (
+    <>
+      <div className="results-panel">
+        <div className="result-card cyan">
+          <div className="label">Cf (Lower){label}</div>
+          <div className="value">{sol.Cf_lower.toFixed(4)}</div>
+        </div>
+        <div className="result-card magenta">
+          <div className="label">Cf (Upper){label}</div>
+          <div className="value">{sol.Cf_upper.toFixed(4)}</div>
+        </div>
+        <div className="result-card gold">
+          <div className="label">Nu (Lower){label}</div>
+          <div className="value">{sol.Nu_lower.toFixed(4)}</div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+            |Nu| = {Math.abs(sol.Nu_lower).toFixed(4)} · {nuDirection(sol.Nu_lower)}
+          </div>
+        </div>
+        <div className="result-card emerald">
+          <div className="label">Nu (Upper){label}</div>
+          <div className="value">{sol.Nu_upper.toFixed(4)}</div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+            |Nu| = {Math.abs(sol.Nu_upper).toFixed(4)} · {nuDirection(sol.Nu_upper)}
+          </div>
+        </div>
       </div>
-      <div className="result-card magenta">
-        <div className="label">Cf (Upper){label}</div>
-        <div className="value">{sol.Cf_upper.toFixed(4)}</div>
-      </div>
-      <div className="result-card gold">
-        <div className="label">Nu (Lower){label}</div>
-        <div className="value">{sol.Nu_lower.toFixed(4)}</div>
-      </div>
-      <div className="result-card emerald">
-        <div className="label">Nu (Upper){label}</div>
-        <div className="value">{sol.Nu_upper.toFixed(4)}</div>
-      </div>
-    </div>
+      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0.4rem 0 0', textAlign: 'center' }}>
+        Convention: Nu = −A₃·θ′ is <strong>signed</strong>. The magnitude |Nu| is the heat-transfer rate; the sign is the direction (Nu &lt; 0 means heat flows from the internally-heated fluid into the wall).
+      </p>
+    </>
   );
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -4029,9 +3677,26 @@ const FloatingControls = () => (
 
 const renderSimulation = () => (
   <div className="visualization-section animate-slide-up">
-    <ResultsPanel />
+    {ResultsPanel()}
     <FlowVisualization params={params} solution={solution} />
-    
+
+    <div className="physics-highlight" style={{ marginTop: '1rem' }}>
+      <strong>What you're seeing (live 2nd-order FDM solve):</strong>
+      <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.2rem', lineHeight: 1.6 }}>
+        <li><strong>Motion → velocity.</strong> Each particle advects at the solver's local
+          velocity <em>W(η)</em>. It is ~still at the stationary lower wall
+          (no-slip, <em>W(0)=0</em>, ringed pink) and fastest near the moving upper plate.</li>
+        <li><strong>Slip.</strong> The cyan ticks on the top plate move at the plate speed <em>Re</em>.
+          With no slip (λ=0) the top fluid keeps up, so <em>W(1)=Re</em>; raise <em>λ</em> and the
+          fluid lags the plate, so the slip gap is <em>W(1)=Re−λW'(1) &lt; Re</em>.</li>
+        <li><strong>Colour → temperature.</strong> Particle colour maps θ(η) from the energy
+          equation (viscous + Ohmic/Joule heating); stronger convective cooling (higher <em>Bi</em>)
+          pulls the upper region cooler.</li>
+        <li><strong>Magnetic field.</strong> Higher <em>Ha</em> damps the velocity (Lorentz force),
+          flattening the profile and shifting heat generation.</li>
+      </ul>
+    </div>
+
 {compareMode && compareSolution && (
   <div className="comparison-section">
     {/* Header with Exit Button */}
@@ -4075,7 +3740,7 @@ const renderSimulation = () => (
       <div className="comparison-grid">
         <div className="comparison-card">
           <h4>Configuration A (Current)</h4>
-          <ResultsPanel sol={solution} label=" (A)" />
+          {ResultsPanel({ sol: solution, label: ' (A)' })}
           <div className="comparison-sliders">
             <ParameterSlider 
               label="Ha" 
@@ -4142,7 +3807,7 @@ const renderSimulation = () => (
         
         <div className="comparison-card">
           <h4>Configuration B (Compare)</h4>
-          <ResultsPanel sol={compareSolution} label=" (B)" />
+          {ResultsPanel({ sol: compareSolution, label: ' (B)' })}
           <div className="comparison-sliders">
             <ParameterSlider 
               label="Ha" 
@@ -4393,7 +4058,7 @@ const renderSimulation = () => (
 
 const renderVelocity = () => (
   <div className="visualization-section animate-slide-up">
-    <ResultsPanel />
+    {ResultsPanel()}
     
     <div className="chart-section">
       <div className="chart-header">
@@ -4552,9 +4217,9 @@ const renderVelocity = () => (
       
       <p><strong>Physical Interpretation:</strong></p>
       <ul>
-        <li><strong>A₁·W''</strong> — Viscous diffusion (nanofluid viscosity effect)</li>
-        <li><strong>A₂·Ha²·W</strong> — Lorentz force (magnetic damping)</li>
-        <li><strong>G</strong> — Pressure gradient driving force</li>
+        <li><strong>A₁·W''</strong>: Viscous diffusion (nanofluid viscosity effect)</li>
+        <li><strong>A₂·Ha²·W</strong>: Lorentz force (magnetic damping)</li>
+        <li><strong>G</strong>: Pressure gradient driving force</li>
       </ul>
       
       <div className="physics-highlight magenta">
@@ -4566,13 +4231,13 @@ const renderVelocity = () => (
       <div className="physics-highlight gold">
         <strong>Updated Boundary Conditions:</strong>
         <div className="equation-inline" style={{ display: 'block', marginTop: '0.5rem' }}>
-          η = 0: W = 0 (no-slip, stationary)<br/>
-          η = 1: W - λ·W' = Re (Navier slip condition)
+          η = 0: W = 0 (no-slip, stationary lower plate)<br/>
+          η = 1: W = Re − λ·W'(η) (Navier partial slip) &nbsp;⇔&nbsp; W + λ·W' = Re
         </div>
         <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>
-          • <strong>λ = μ_f/(βH)</strong> — Uses base fluid viscosity μ_f (not μ_nf)<br/>
-          • <strong>β</strong> — Slip length at wall-fluid interface<br/>
-          • <strong>μ_f</strong> — Base fluid dynamic viscosity
+          • <strong>λ = μ_f/(βH)</strong>: Uses base fluid viscosity μ_f (not μ_nf)<br/>
+          • <strong>β</strong>: Slip length at wall-fluid interface<br/>
+          • <strong>μ_f</strong>: Base fluid dynamic viscosity
         </p>
       </div>
       
@@ -4585,9 +4250,9 @@ const renderVelocity = () => (
       
       <p><strong>Physical Significance:</strong></p>
       <ul>
-        <li><strong>λ = 0:</strong> No-slip condition (traditional Couette flow)</li>
-        <li><strong>λ {'>'} 0:</strong> Slip reduces shear stress at upper plate</li>
-        <li><strong>Increasing λ:</strong> More slip → higher velocities for same Re</li>
+        <li><strong>λ = 0:</strong> No-slip condition (traditional Couette flow); fluid at the top moves with the plate, W(1)=Re</li>
+        <li><strong>λ {'>'} 0:</strong> The fluid slips behind the moving plate: W(1)=Re−λW'(1) &lt; Re, which lowers wall shear and skin friction</li>
+        <li><strong>Increasing λ:</strong> Reduces the upper-wall velocity, drag and viscous heating together (as λ goes 0→1, wall drag falls ≈67% and peak temperature ≈86%)</li>
         <li><strong>Note:</strong> λ depends on μ_f, so changes in nanoparticle concentration affect bulk flow (via A₁) but not the slip condition directly</li>
       </ul>
     </div>
@@ -4596,7 +4261,7 @@ const renderVelocity = () => (
 
 const renderTemperature = () => (
   <div className="visualization-section animate-slide-up">
-    <ResultsPanel />
+    {ResultsPanel()}
     
     <div className="chart-section">
       <div className="chart-header">
@@ -4705,9 +4370,12 @@ const renderTemperature = () => (
         <p>Heat transfer rate at the walls:</p>
         <div className="equation-inline">Nu = -A₃ × dθ/dη</div>
         <p style={{ marginTop: '0.5rem' }}>
-          At the lower plate: 
+          At the lower plate:
           <span style={{ color: 'var(--accent-gold)', marginLeft: '0.5rem', fontWeight: 'bold' }}>
             Nu = {solution.Nu_lower.toFixed(4)}
+          </span>
+          <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
+            (|Nu| = {Math.abs(solution.Nu_lower).toFixed(4)}, {nuDirection(solution.Nu_lower)})
           </span>
           {compareMode && compareSolution && (
             <span style={{ color: 'var(--accent-emerald)', marginLeft: '1rem', fontWeight: 'bold' }}>
@@ -4716,9 +4384,12 @@ const renderTemperature = () => (
           )}
         </p>
         <p>
-          At the upper plate: 
+          At the upper plate:
           <span style={{ color: 'var(--accent-emerald)', marginLeft: '0.5rem', fontWeight: 'bold' }}>
             Nu = {solution.Nu_upper.toFixed(4)}
+          </span>
+          <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
+            (|Nu| = {Math.abs(solution.Nu_upper).toFixed(4)}, {nuDirection(solution.Nu_upper)})
           </span>
           {compareMode && compareSolution && (
             <span style={{ color: 'var(--accent-emerald)', marginLeft: '1rem', fontWeight: 'bold' }}>
@@ -4726,9 +4397,15 @@ const renderTemperature = () => (
             </span>
           )}
         </p>
+        <div className="physics-highlight" style={{ marginTop: '0.75rem' }}>
+          <strong>Reading Nu.</strong> Nu = −A₃·θ′|<sub>wall</sub> is a <em>signed</em> heat-transfer rate:
+          the magnitude |Nu| is the rate and the sign is the direction. <strong>Nu &gt; 0</strong> means heat flows from the wall into the fluid.
+          <strong> Nu &lt; 0</strong> means heat flows from the internally-heated fluid into the wall
+          (the wall acts as a heat sink). At high Re the lower-wall Nu(0) reverses sign (see the Figures tab).
+        </div>
       </div>
     </div>
-    
+
     <div className="physics-box">
       <h4><Thermometer size={18} /> Physics of Temperature Distribution</h4>
       
@@ -4741,8 +4418,8 @@ const renderTemperature = () => (
       
       <p><strong>Heat Generation Sources:</strong></p>
       <ul>
-        <li><strong>A₁·Pr·Ec·(W')²</strong> — Viscous dissipation (friction heating)</li>
-        <li><strong>A₂·Pr·Ec·Ha²·W²</strong> — Joule heating (magnetic field effect)</li>
+        <li><strong>A₁·Pr·Ec·(W')²</strong>: Viscous dissipation (friction heating)</li>
+        <li><strong>A₂·Pr·Ec·Ha²·W²</strong>: Joule heating (magnetic field effect)</li>
       </ul>
       
       <div className="physics-highlight gold">
@@ -4752,9 +4429,9 @@ const renderTemperature = () => (
           η = 1: dθ/dη = -Bi·θ (convective cooling)
         </div>
         <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>
-          • <strong>Bi = H·h_f/k_f</strong> — Biot number<br/>
-          • <strong>h_f</strong> — Convective heat transfer coefficient<br/>
-          • <strong>k_f</strong> — Base fluid thermal conductivity
+          • <strong>Bi = H·h_f/k_f</strong>: Biot number<br/>
+          • <strong>h_f</strong>: Convective heat transfer coefficient<br/>
+          • <strong>k_f</strong>: Base fluid thermal conductivity
         </p>
       </div>
       
@@ -4793,7 +4470,7 @@ const renderTemperature = () => (
 
 const renderEntropy = () => (
   <div className="visualization-section animate-slide-up">
-    <ResultsPanel />
+    {ResultsPanel()}
     
     <div className="chart-section">
       <div className="chart-header">
@@ -4911,6 +4588,11 @@ const renderEntropy = () => (
           <br />
           • <strong>Be = 0.5</strong> (Q = 1): Equal contribution
         </p>
+        <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>
+          <em>In this MHD nanofluid regime Be is typically ≪ 0.5 (baseline Be ≈ 0.008):
+          fluid friction and Joule heating together account for &gt; 99% of the irreversibility,
+          so heat-transfer irreversibility is almost always the minor term.</em>
+        </p>
       </div>
       
       <div className="physics-highlight gold">
@@ -4920,7 +4602,7 @@ const renderEntropy = () => (
         </p>
         <ul style={{ marginTop: '0.5rem', marginBottom: 0 }}>
           <li><strong>Slip condition (λ = μ_f/βH):</strong> Reduces shear at upper plate → decreases Ns,fluid</li>
-          <li><strong>Convective cooling (Bi = H·h_f/k_f):</strong> Increases temperature gradients near η=1 → affects Ns,heat distribution</li>
+          <li><strong>Convective cooling (Bi = H·h_f/k_f):</strong> Stronger cooling lowers θ(1) and the temperature gradients, so it <em>decreases</em> the heat-transfer irreversibility Ns,heat (N₁ falls ≈80% as Bi rises 0.01→10; N₂, N₃ essentially unchanged)</li>
           <li><strong>Base fluid properties in BCs:</strong> λ uses μ_f, Bi uses k_f (not nanofluid-enhanced properties)</li>
         </ul>
       </div>
@@ -4946,9 +4628,9 @@ const renderEntropy = () => (
               </tr>
               <tr>
                 <td><strong>Bi (Convective)</strong></td>
-                <td><span style={{color: 'var(--accent-magenta)'}}>Increases</span> (steeper θ')</td>
-                <td>Indirect</td>
-                <td>Indirect</td>
+                <td><span style={{color: 'var(--accent-emerald)'}}>Decreases</span> (≈80%: reduced θ gradients)</td>
+                <td>≈ Unchanged</td>
+                <td>≈ Unchanged</td>
               </tr>
               <tr>
                 <td><strong>Base fluid in BCs</strong></td>
@@ -5007,43 +4689,62 @@ const renderAILab = () => (
     {/* Analytics Dashboard */}
     <AnalyticsDashboard solution={solution} previousSolution={previousSolution} />
     
-    {/* Neural Network Predictions */}
+    {/* ML Surrogate Predictions (real MLPRegressor) */}
     <div className="ai-section">
       <div className="ai-section-header">
         <Cpu size={20} />
-        <h3>Neural Network Instant Predictions</h3>
-        <span className="ai-badge">Real-time</span>
+        <h3>ML Surrogate: 9-Output Instant Predictions</h3>
+        <span className="ai-badge">
+          {mlpModel ? `MLPRegressor · R² = ${(mlpModel.r2 * 100).toFixed(2)}%` : 'MLPRegressor'}
+        </span>
       </div>
       <p className="ai-description">
-        Physics-informed neural network provides instant approximations based on the governing equations 
-        with <strong>updated boundary conditions</strong>: W(1) = Re - λ·W'(1) where λ = μ_f/(βH) uses base fluid viscosity.
+        A trained scikit-learn <strong>MLPRegressor</strong> (11 → 256 → 256 → 128 → 64 → 9, ReLU):
+        a <em>surrogate</em> that learned the SQLM solver's input→output map, not a physics solver itself.
+        The exported weights/scalers run in-browser. Inputs are the exact trained feature order
+        (Ha, Re, Ec, Bi, λ, G, φ, A₁, A₂, A₃, fluid_code); it returns all nine engineering outputs.
+        {mlpModel
+          ? <> Mean test accuracy <strong>R² = {(mlpModel.r2 * 100).toFixed(2)}%</strong> (vs SQLM).</>
+          : <> Loading model…</>}
       </p>
       <div className="nn-predictions-grid">
-        <div className="nn-card">
-          <div className="nn-label">Predicted Cf (Lower)</div>
-          <div className="nn-value cyan">{nnPrediction?.Cf_lower.toFixed(4)}</div>
-          <div className="nn-actual">Actual: {solution.Cf_lower.toFixed(4)}</div>
-          <div className="nn-error">Error: {Math.abs((nnPrediction?.Cf_lower - solution.Cf_lower) / solution.Cf_lower * 100).toFixed(1)}%</div>
-        </div>
-        <div className="nn-card">
-          <div className="nn-label">Predicted Nu (Lower)</div>
-          <div className="nn-value magenta">{nnPrediction?.Nu_lower.toFixed(4)}</div>
-          <div className="nn-actual">Actual: {solution.Nu_lower.toFixed(4)}</div>
-          <div className="nn-error">Error: {Math.abs((nnPrediction?.Nu_lower - solution.Nu_lower) / (solution.Nu_lower || 0.001) * 100).toFixed(1)}%</div>
-        </div>
-        <div className="nn-card">
-          <div className="nn-label">Predicted Max W</div>
-          <div className="nn-value gold">{nnPrediction?.maxW.toFixed(4)}</div>
-          <div className="nn-actual">Actual: {solution.maxW.toFixed(4)}</div>
-          <div className="nn-error">Error: {Math.abs((nnPrediction?.maxW - solution.maxW) / solution.maxW * 100).toFixed(1)}%</div>
-        </div>
-        <div className="nn-card">
-          <div className="nn-label">Model Confidence</div>
-          <div className="nn-value emerald">{(nnPrediction?.confidence * 100).toFixed(1)}%</div>
-          <div className="nn-confidence-bar">
-            <div style={{ width: `${nnPrediction?.confidence * 100}%` }}></div>
-          </div>
-        </div>
+        {[
+          { key: 'Cf_lower', label: 'Cf (lower)', fdm: solution.Cf_lower, cls: 'cyan' },
+          { key: 'Cf_upper', label: 'Cf (upper)', fdm: solution.Cf_upper, cls: 'cyan' },
+          { key: 'Nu_lower', label: 'Nu (lower, signed)', fdm: solution.Nu_lower, cls: 'magenta' },
+          { key: 'Nu_upper', label: 'Nu (upper, signed)', fdm: solution.Nu_upper, cls: 'magenta' },
+          { key: 'Ns_max',   label: 'Ns max',   fdm: Math.max(...solution.Ns), cls: 'gold' },
+          { key: 'Ns_avg',   label: 'Ns avg',   fdm: solution.avgNs, cls: 'gold' },
+          { key: 'Be_avg',   label: 'Be avg',   fdm: solution.avgBe, cls: 'emerald' },
+          { key: 'maxW',     label: 'max W',    fdm: solution.maxW, cls: 'cyan' },
+          { key: 'maxTheta', label: 'max θ',    fdm: solution.maxTheta, cls: 'magenta' },
+        ].map(o => {
+          const pred = nnPrediction ? nnPrediction[o.key] : null;
+          const delta = (pred != null) ? Math.abs((pred - o.fdm) / (Math.abs(o.fdm) || 1e-6) * 100) : null;
+          const r2o = mlpModel?.r2_per_output?.[o.key];
+          const isNu = o.key.startsWith('Nu');
+          return (
+            <div className="nn-card" key={o.key}>
+              <div className="nn-label">{o.label}</div>
+              <div className={`nn-value ${o.cls}`}>{pred != null ? pred.toFixed(4) : '…'}</div>
+              {isNu && pred != null && (
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>|Nu| = {Math.abs(pred).toFixed(4)}, {nuDirection(pred)}</div>
+              )}
+              <div className="nn-actual">FDM: {o.fdm.toFixed(4)}</div>
+              <div className="nn-error">
+                {delta != null ? `Δ vs FDM ${delta.toFixed(1)}%` : ''}
+                {r2o != null ? `  ·  R²=${r2o.toFixed(4)}` : ''}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="physics-highlight" style={{ marginTop: '0.75rem' }}>
+        <strong>Reading this panel.</strong> <em>R²</em> is the surrogate's test accuracy against the
+        SQLM ground truth (per output). <em>Δ vs FDM</em> compares the prediction against this app's live
+        2nd-order FDM solve (a different discretisation), so a small Δ is expected, and larger Δ appears
+        for the entropy/θ extremes where FDM and SQLM diverge at extreme parameters.
+        Nu is <strong>signed</strong>: the magnitude |Nu| is the heat-transfer rate and the sign is the direction (Nu &lt; 0 means heat flows from the internally-heated fluid into the wall).
       </div>
     </div>
     
@@ -5093,8 +4794,8 @@ const renderAILab = () => (
       <button 
         className="ml-load-btn"
         onClick={async () => {
-          await loadTrainingData(500);
-          alert(`Loaded ${trainingData.length} training samples!`);
+          const data = await loadTrainingData(500);
+          showToast(`Loaded ${data?.length || 0} training samples!`, 'success');
         }}
         disabled={mlLoading}
       >
@@ -5610,22 +5311,71 @@ const renderAILab = () => (
   const renderFigures = () => (
     <div className="animate-slide-up">
       <div className="section-intro">
-        <h2><Image size={24} /> Research Figures</h2>
-        <p>Comprehensive analysis of MHD nanofluid Couette flow using spectral quasi-linearization method (SQLM).</p>
+        <h2><Image size={24} /> Key Research Figures (SQLM)</h2>
+        <p>The core steady-state results, computed with the Spectral Quasi-linearisation Method (SQLM).
+          Each figure below is shown with a short discussion of what it demonstrates.</p>
       </div>
-      
-      <div className="figures-grid">
-        {Object.entries(FIGURE_DESCRIPTIONS).map(([filename, figure]) => (
-          <ResearchFigure
-            key={filename}
-            filename={filename}
-            title={figure.title}
-            description={figure.description}
-            results={figure.results}
-          />
+
+      <div className="physics-box" style={{ marginBottom: '1.5rem' }}>
+        {[
+          {
+            file: 'Anal_Cu_Gen.png',
+            title: '1. Analytical validation: SQLM vs exact solutions (Cu)',
+            text: `The solver is verified against four exact limiting cases: simple Couette, MHD Couette,
+              viscous dissipation, and pressure-driven flow. Numerical and analytical velocity/temperature
+              profiles are visually indistinguishable, agreeing to machine precision (max error < 10⁻¹²).
+              This confirms the momentum and energy discretisations before the full coupled nonlinear
+              problem is solved.`
+          },
+          {
+            file: 'Grid_Cu_Cf_Nu_Spectral.png',
+            title: '2. Spectral grid convergence (Cu)',
+            text: `Skin friction and Nusselt number converge exponentially with the number of
+              Chebyshev–Gauss–Lobatto collocation points. At only N = 10 the relative error is
+              7.98×10⁻¹⁰ in C_f and 3.17×10⁻⁹ in Nu versus the N = 80 reference, i.e. engineering accuracy
+              at negligible cost. All engineering quantities are grid-independent by N = 10.`
+          },
+          {
+            file: 'Re_Study_Vel.png',
+            title: '3. Velocity profiles and peak velocity vs Re (representative profile)',
+            text: `Velocity profiles at Re = 5 with the peak velocity W_max plotted against Re. W_max scales
+              almost linearly (W_max ≈ Re) up to Re ≈ 2 (classical laminar Couette–Poiseuille behaviour),
+              then deviates slightly sublinearly beyond Re ≈ 2 as Lorentz (magnetic) damping grows. The three
+              fluids differ by < 2% at φ = 0.05, so nanoparticle loading barely affects the momentum field:
+              material choice matters thermally, not mechanically, at this loading.`
+          },
+          {
+            file: 'Re_Study_Nu.png',
+            title: '4. Skin friction & Nusselt vs Re: lower-wall Nu(0) sign reversal (headline result)',
+            text: `C_f(0) grows linearly with Re, but |Nu(0)| is non-monotonic: it rises to ≈0.29–0.31 near
+              Re≈3 then falls to ≈0.17–0.19 by Re=5. This is a genuine sign change in θ′(0). At moderate Re
+              the stationary wall absorbs heat (Nu(0)=−A₃θ′(0) < 0); quadratically growing viscous
+              dissipation (∝Re²) then concentrates heating at the lower wall and reverses the heat-flux
+              direction near Re≈3–4, so the wall switches from heat sink to heat source. This app's live
+              solver reproduces the sign (Nu is displayed signed in the Temperature and AI-Lab tabs).`
+          },
+          {
+            file: 'Re_Study_Be.png',
+            title: '5. Entropy generation & Bejan number vs Re',
+            text: `Maximum entropy follows a near-quadratic power law N_s,max ∝ Re^1.5–2, increasing ~120-fold
+              from Re=0.1 to Re=5, the strongest sensitivity of any parameter. The Bejan number rises from
+              ≈0.01 (friction/Joule dominance > 98%) toward ≈0.35–0.43 at Re=5: heat-transfer irreversibility
+              grows but friction + magnetic effects still dominate (Be < 0.5). Al₂O₃ stays ~3% below water in
+              entropy across all Re, confirming the electrical-conductivity ratio A₂ as the decisive
+              material-selection criterion.`
+          }
+        ].map(fig => (
+          <div key={fig.file} style={{ marginTop: '1.25rem' }}>
+            <h4 style={{ marginBottom: '0.4rem' }}>{fig.title}</h4>
+            <img
+              src={`${process.env.PUBLIC_URL}/images/${fig.file}`}
+              alt={fig.title}
+              style={{ width: '100%', maxWidth: '860px', display: 'block', margin: '0 auto 0.5rem', borderRadius: '8px', background: '#fff' }}
+            />
+            <p style={{ fontSize: '0.9rem', lineHeight: 1.6, margin: 0 }}>{fig.text}</p>
+          </div>
         ))}
       </div>
-      
     </div>
   );
 
@@ -5637,8 +5387,46 @@ const renderTheory = () => (
     </div>
     
     <div className="theory-grid">
+      <div className="equation-card full-width">
+        <h3><Activity size={20} /> Dimensional Governing Equations (steady)</h3>
+        <div className="equation-grid">
+          <div className="equation">Continuity:&nbsp; ∂u/∂x = 0</div>
+          <div className="equation">Momentum:&nbsp; −∂P/∂x + μ<sub>nf</sub>·∂²u/∂y² − σ<sub>nf</sub>·B₀²·u = 0</div>
+          <div className="equation">Energy:&nbsp; k<sub>nf</sub>·∂²T/∂y² + μ<sub>nf</sub>·(∂u/∂y)² + σ<sub>nf</sub>·B₀²·u² = 0</div>
+          <div className="equation">Entropy:&nbsp; E<sub>G</sub> = (k<sub>nf</sub>/T<sub>a</sub>²)(∂T/∂y)² + (μ<sub>nf</sub>/T<sub>a</sub>)(∂u/∂y)² + (σ<sub>nf</sub>·B₀²/T<sub>a</sub>)·u²</div>
+        </div>
+        <div className="equation" style={{ marginTop: '0.75rem' }}>
+          BCs:&nbsp; u(0)=0, T(0)=T<sub>a</sub> &nbsp;;&nbsp; u(H)=U − (μ<sub>f</sub>/β)·u<sub>y</sub>(H), &nbsp; −k<sub>f</sub>·T<sub>y</sub>(H) = h<sub>f</sub>·[T(H) − T<sub>a</sub>]
+        </div>
+        <p className="equation-description">
+          Steady, fully-developed, incompressible single-phase nanofluid between parallel plates a distance H
+          apart under a uniform transverse field B₀ (low magnetic Reynolds number). The lower plate is stationary
+          and isothermal at ambient T<sub>a</sub>; the upper plate moves at U with Navier partial slip (slip length β)
+          and convective cooling (coefficient h<sub>f</sub>).
+        </p>
+      </div>
+
+      <div className="equation-card full-width">
+        <h3><Gauge size={20} /> Non-dimensionalisation &amp; Dimensionless Groups</h3>
+        <div className="equation-grid">
+          <div className="equation">W = uH/ν<sub>f</sub>, η = y/H, θ = (T−T<sub>a</sub>)/T<sub>a</sub>, G = −∂P̄/∂X</div>
+          <div className="equation">Re = UH/ν<sub>f</sub> &nbsp;(upper-plate motion)</div>
+          <div className="equation">Ha = H·B₀·√(σ<sub>f</sub>/μ<sub>f</sub>) &nbsp;(magnetic/viscous)</div>
+          <div className="equation">Pr = μ<sub>f</sub>·C<sub>pf</sub>/k<sub>f</sub> &nbsp;(momentum/thermal)</div>
+          <div className="equation">Ec = ν<sub>f</sub>²/(H²·C<sub>pf</sub>·T<sub>a</sub>) &nbsp;(viscous dissipation)</div>
+          <div className="equation">Bi = H·h<sub>f</sub>/k<sub>f</sub> &nbsp;(convective/conductive)</div>
+          <div className="equation">λ = μ<sub>f</sub>/(βH) &nbsp;(Navier slip; base-fluid μ<sub>f</sub>)</div>
+          <div className="equation">A₁ = μ<sub>nf</sub>/μ<sub>f</sub>, A₂ = σ<sub>nf</sub>/σ<sub>f</sub>, A₃ = k<sub>nf</sub>/k<sub>f</sub></div>
+          <div className="equation">Ns = E<sub>G</sub>·H²/k<sub>f</sub></div>
+        </div>
+        <p className="equation-description" style={{ marginTop: '1rem' }}>
+          Applying these scalings to the dimensional system collapses it onto the dimensionless equations below,
+          governed entirely by Ha, Re, Pr, Ec, Bi, λ, G and the nanofluid ratios A₁, A₂, A₃.
+        </p>
+      </div>
+
       <div className="equation-card">
-        <h3><Activity size={20} /> Momentum Equation</h3>
+        <h3><Activity size={20} /> Momentum Equation (dimensionless)</h3>
         <div className="equation">A₁·W'' - A₂·Ha²·W + G = 0</div>
         <p className="equation-description">
           Describes the velocity distribution accounting for nanofluid viscosity enhancement (A₁), 
@@ -5657,23 +5445,24 @@ const renderTheory = () => (
       </div>
       
       <div className="equation-card">
-        <h3><Layers size={20} /> Modified Boundary Conditions</h3>
+        <h3><Layers size={20} /> Boundary Conditions (dimensionless)</h3>
         <div className="equation">
-          η = 0: W = 0, θ = 0 (Lower plate)<br/>
-          η = 1: W - λW' = Re, θ' = -Bi·θ (Upper plate)
+          η = 0: W = 0, θ = 0 (stationary lower plate)<br/>
+          η = 1: W = Re − λ·W'(η), θ'(η) = −Bi·θ (upper plate)
         </div>
         <p className="equation-description">
-          <strong>Key Modification:</strong> The slip condition now uses the base fluid viscosity μ_f in the 
-          slip coefficient λ = μ_f/(βH), where β is the slip length. The upper plate experiences convective 
-          heat transfer (Robin boundary condition) with the environment.
+          Lower plate: no-slip and isothermal at ambient (θ=0). Upper plate: Navier partial slip
+          W(1)=Re−λW'(1) (equivalently W+λW'=Re) with the slip coefficient λ = μ_f/(βH) using the
+          <strong> base fluid viscosity μ_f</strong>, and convective cooling via the Robin condition
+          θ'(1)=−Bi·θ(1).
         </p>
       </div>
       
       <div className="equation-card">
         <h3><Gauge size={20} /> Engineering Quantities</h3>
         <div className="equation">
-          Cf = A₁·(dW/dη)|wall — Skin Friction Coefficient<br/>
-          Nu = -A₃·(dθ/dη)|wall — Nusselt Number
+          Cf = A₁·(dW/dη)|wall  (Skin Friction Coefficient)<br/>
+          Nu = -A₃·(dθ/dη)|wall  (Nusselt Number)
         </div>
         <p className="equation-description">
           Skin friction quantifies wall shear stress important for drag calculations.
@@ -5712,14 +5501,14 @@ const renderTheory = () => (
         
         <div className="method-comparison">
           <div className="method-column">
-            <div className="method-badge research">Research (Thesis)</div>
+            <div className="method-badge research">Research (SQLM)</div>
             <h4>Spectral Quasilinearization Method (SQLM)</h4>
             <ul className="method-features">
               <li><Check size={14} /> Chebyshev-Gauss-Lobatto collocation</li>
               <li><Check size={14} /> Exponential (spectral) convergence</li>
               <li><Check size={14} /> Machine precision accuracy (≈10⁻¹³)</li>
               <li><Check size={14} /> Optimal for publication-quality results</li>
-              <li><Check size={14} /> Implemented in MATLAB (see thesis)</li>
+              <li><Check size={14} /> Implemented in MATLAB (research code)</li>
             </ul>
             <div className="method-equation">
               <strong>Convergence:</strong> Error ≈ O(e⁻ᶜᴺ) with N collocation points
@@ -5736,7 +5525,7 @@ const renderTheory = () => (
             <ul className="method-features">
               <li><Check size={14} /> Central difference approximation</li>
               <li><Check size={14} /> Iterative relaxation solver</li>
-              <li><Check size={14} /> Real-time computation (≈10⁻⁸ accuracy)</li>
+              <li><Check size={14} /> Real-time interactive computation (live error shown in the Validation tab)</li>
               <li><Check size={14} /> Optimized for interactive visualization</li>
               <li><Check size={14} /> Implemented in JavaScript</li>
             </ul>
@@ -5747,7 +5536,7 @@ const renderTheory = () => (
         </div>
         
         <div className="method-details">
-          <h4><Lightbulb size={18} /> Modified Boundary Treatment</h4>
+          <h4><Lightbulb size={18} /> Boundary Discretisation</h4>
           <div className="detail-grid">
             <div className="detail-item">
               <Target size={16} />
@@ -5769,7 +5558,7 @@ const renderTheory = () => (
         </div>
         
         <div className="method-algorithm">
-          <h4><Activity size={18} /> Finite Difference Algorithm with Modified BCs</h4>
+          <h4><Activity size={18} /> Finite Difference Algorithm</h4>
           <div className="algorithm-steps">
             <div className="algo-step">
               <div className="step-number">1</div>
@@ -5807,48 +5596,6 @@ const renderTheory = () => (
           </div>
         </div>
         
-        <div className="validation-note">
-          <Award size={18} />
-          <div>
-            <strong>Physical Consistency:</strong> The slip parameter λ uses base fluid viscosity μ_f as specified 
-            in the modified boundary condition: λ = μ_f/(βH). This reflects the physical reality that slip 
-            mechanisms at the wall-fluid interface depend on the base fluid properties rather than the 
-            enhanced nanofluid viscosity.
-          </div>
-        </div>
-      </div>
-      
-      <div className="equation-card full-width important-note">
-        <h3><AlertTriangle size={20} /> Important Boundary Condition Updates</h3>
-        <div className="update-grid">
-          <div className="update-item">
-            <div className="update-badge">Modified</div>
-            <h4>Slip Condition at Upper Plate</h4>
-            <p>
-              <strong>Original:</strong> W(1) = Re - λ·W'(1) where λ was dimensionless slip parameter<br/>
-              <strong>Modified:</strong> W(1) = Re - (μ_f/βH)·W'(1)<br/>
-              <em>λ = μ_f/(βH) now explicitly uses base fluid viscosity μ_f</em>
-            </p>
-          </div>
-          <div className="update-item">
-            <div className="update-badge">Clarified</div>
-            <h4>Physical Interpretation</h4>
-            <p>
-              • β is the slip length at the wall-fluid interface<br/>
-              • μ_f appears in λ because slip mechanisms depend on base fluid properties<br/>
-              • This distinguishes wall effects (using μ_f) from bulk flow effects (using μ_nf)
-            </p>
-          </div>
-          <div className="update-item">
-            <div className="update-badge">Implementation</div>
-            <h4>In This Simulation</h4>
-            <p>
-              The slip parameter λ is treated as a dimensionless input parameter, but it physically 
-              represents λ = μ_f/(βH). When you adjust λ in the controls, you're effectively changing 
-              the slip length β relative to the base fluid viscosity.
-            </p>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -5858,11 +5605,20 @@ const renderValidation = () => (
   <div className="visualization-section animate-slide-up">
     <div className="section-intro">
       <h2><Award size={24} /> Analytical Validation & Grid Convergence</h2>
-      <p>Comparison of numerical FDM solution against exact analytical solutions for limiting cases.</p>
+      <p>This app's live 2nd-order FDM solver is compared against the exact analytical solutions
+        for four limiting cases. Everything below is computed live from the solver; no values are hard-coded.</p>
     </div>
-    
+
+    <div className="physics-highlight" style={{ marginBottom: '1rem' }}>
+      <strong>How this validates against the research (SQLM).</strong> The four exact solutions used here
+      are the <em>same</em> benchmarks the research SQLM solver is verified against, where it matches to
+      machine precision (max error &lt; 10⁻¹³). Because both solvers are anchored to identical exact
+      ground truth, agreement here transitively cross-checks the FDM engine against the SQLM results. The FDM
+      errors shown are larger than SQLM's (2nd-order vs spectral), as expected, but small and convergent.
+    </div>
+
     {/* Validation Case Selector */}
-    <ValidationPanel 
+    <ValidationPanel
       params={params}
       numericalSolution={solution}
     />
@@ -5873,8 +5629,14 @@ const renderValidation = () => (
 );
   return (
 
-<ToastProvider>
   <div className="app">
+    <div className="toast-container">
+      {toasts.map(toast => (
+        <div key={toast.id} className={`toast ${toast.type}`}>
+          {toast.message}
+        </div>
+      ))}
+    </div>
     <header className="header">
       <div className="header-content">
         <div className="logo-section">
@@ -5888,7 +5650,6 @@ const renderValidation = () => (
         {/* SWITCHERS MOVED HERE - inside header-content */}
         <div className="header-controls-container">
           <ThemeSwitcher />
-          <LanguageSwitcher />
         </div>
         
         <nav className="nav-tabs">
@@ -5928,7 +5689,7 @@ const renderValidation = () => (
       {activeTab === 'validation' && renderValidation()}
     </main>
     
-    <FloatingControls />
+    {FloatingControls()}
     
     <footer className="footer">
       <p>
@@ -5938,7 +5699,6 @@ const renderValidation = () => (
       </p>
     </footer>
   </div>
-</ToastProvider>
   );
 }
 

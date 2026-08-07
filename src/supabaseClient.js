@@ -19,11 +19,3 @@ export const getUserId = () => {
   }
   return userId;
 };
-
-export const getRandomColor = () => {
-  const colors = [
-    '#8b5cf6', '#ec4899', '#fbbf24', '#14b8a6',
-    '#06b6d4', '#10b981', '#f97316', '#6366f1',
-  ];
-  return colors[Math.floor(Math.random() * colors.length)];
-};
