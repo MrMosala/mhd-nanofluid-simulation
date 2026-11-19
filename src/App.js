@@ -8,8 +8,9 @@ import {
   X, ChevronDown, Wind, TrendingUp, Brain, Target,
   Cpu, Download, Copy, Check, Sparkles, FlaskConical,
   GitCompare, Lightbulb, Rocket, Award, Settings,
-  Upload, AlertTriangle, 
-  Moon, Sun, BarChart2, ChevronLeft, ChevronRight, HelpCircle
+  Upload, AlertTriangle,
+  Moon, Sun, BarChart2, ChevronLeft, ChevronRight, HelpCircle,
+  FileText, ExternalLink
 } from 'lucide-react';
 import { useSteadySimulations } from './hooks/useSteadySimulations';
 import { getUserId } from './supabaseClient';
@@ -413,9 +414,9 @@ function solveMHDCouetteFlow(params) {
   // ──────────────────────────────────────────────────────────────
   const Cf_lower = A1 * Wp_final[0];
   const Cf_upper = A1 * Wp_final[N];
-  // Nu is a SIGNED quantity: Nu = -A3·θ'|_{η=0,1}. A negative Nu
-  // means heat flux into the wall (e.g. Nu(0) sign reversal at high Re). Do NOT
-  // wrap in Math.abs() — consumers that want magnitude apply their own abs().
+  // Nu is a SIGNED quantity: Nu = -A3·θ'|_{η=0,1}. A negative Nu means heat
+  // flux into the wall (the lower wall Nu(0) stays negative for all Re). Do NOT
+  // wrap in Math.abs(): consumers that want magnitude apply their own abs().
   const Nu_lower = -A3 * Thetap_final[0];
   const Nu_upper = -A3 * Thetap_final[N];
   
@@ -3132,8 +3133,12 @@ function App() {
 
   // ═══════════════════════════════════════════════════════════════════════
   // ML FEATURES - LOAD STATS ON MOUNT
+  // Gated behind the community flag so the app makes no Supabase network call
+  // on load (keeps the console clean when the community backend is disabled or
+  // unreachable). Re-enable with ENABLE_COMMUNITY_AUTOSAVE.
   // ═══════════════════════════════════════════════════════════════════════
   useEffect(() => {
+    if (!ENABLE_COMMUNITY_AUTOSAVE) return;
     const loadStats = async () => {
       const stats = await getTrainingStats();
       setMlStats(stats);
@@ -4401,7 +4406,8 @@ const renderTemperature = () => (
           <strong>Reading Nu.</strong> Nu = −A₃·θ′|<sub>wall</sub> is a <em>signed</em> heat-transfer rate:
           the magnitude |Nu| is the rate and the sign is the direction. <strong>Nu &gt; 0</strong> means heat flows from the wall into the fluid.
           <strong> Nu &lt; 0</strong> means heat flows from the internally-heated fluid into the wall
-          (the wall acts as a heat sink). At high Re the lower-wall Nu(0) reverses sign (see the Figures tab).
+          (the wall acts as a heat sink). The lower-wall Nu(0) stays negative at every Reynolds number, so the
+          stationary wall is always a heat sink, with |Nu(0)| growing to about 0.17 at Re=5 (see the Figures tab).
         </div>
       </div>
     </div>
@@ -5346,13 +5352,13 @@ const renderAILab = () => (
           },
           {
             file: 'Re_Study_Nu.png',
-            title: '4. Skin friction & Nusselt vs Re: lower-wall Nu(0) sign reversal (headline result)',
-            text: `C_f(0) grows linearly with Re, but |Nu(0)| is non-monotonic: it rises to ≈0.29–0.31 near
-              Re≈3 then falls to ≈0.17–0.19 by Re=5. This is a genuine sign change in θ′(0). At moderate Re
-              the stationary wall absorbs heat (Nu(0)=−A₃θ′(0) < 0); quadratically growing viscous
-              dissipation (∝Re²) then concentrates heating at the lower wall and reverses the heat-flux
-              direction near Re≈3–4, so the wall switches from heat sink to heat source. This app's live
-              solver reproduces the sign (Nu is displayed signed in the Temperature and AI-Lab tabs).`
+            title: '4. Skin friction and Nusselt number vs Re (base fluid, Cu, Al₂O₃)',
+            text: `C_f(0) grows almost linearly with Re (base fluid C_f ≈ 0.457 Re + 0.199). The lower-wall
+              Nusselt magnitude |Nu(0)| grows monotonically with Re, from about 1.8×10⁻⁴ at Re=0.1 to about
+              0.167 (base fluid), 0.19 (Cu) and 0.18 (Al₂O₃) at Re=5. The sign of Nu(0) stays negative at
+              every Reynolds number (Nu(0) = −A₃·θ'(0) &lt; 0), so the stationary lower wall always absorbs
+              heat and acts as a heat sink. There is no sign reversal. The signed Nu(0) from this app's live
+              solver reproduces this behaviour (Nu is shown signed in the Temperature and AI Lab tabs).`
           },
           {
             file: 'Re_Study_Be.png',
@@ -5627,6 +5633,76 @@ const renderValidation = () => (
     <GridConvergencePanel params={params} />
   </div>
 );
+
+const renderPaper = () => (
+  <div className="theory-content animate-slide-up">
+    <div className="section-intro full-width">
+      <h2><FileText size={24} /> Published Paper</h2>
+      <p>This app accompanies a peer-reviewed conference paper that has been accepted for
+        publication in the SAIP 2026 Conference Proceedings (South African Institute of Physics).</p>
+    </div>
+
+    <div className="equation-card full-width">
+      <div className="ai-section-header">
+        <Award size={20} />
+        <h3>Entropy Generation in Steady Magnetohydrodynamic Nanofluid Couette Flow with Partial Slip and Convective Cooling</h3>
+        <span className="ai-badge emerald">Accepted</span>
+      </div>
+      <p className="equation-description" style={{ marginTop: '0.75rem' }}>
+        <strong>Authors:</strong> S. I. Mosala (Department of Physics, Nelson Mandela University);
+        O. D. Makinde (Faculty of Military Science, Stellenbosch University);
+        A. Muronga (Department of Physics, Nelson Mandela University).
+        <br />
+        <strong>Published in:</strong> Proceedings of the SAIP 2026 Conference (South African Institute of Physics).
+      </p>
+      <div className="quick-actions" style={{ marginTop: '1rem' }}>
+        <a
+          className="action-btn"
+          href={`${process.env.PUBLIC_URL}/SAIP2026_Mosala.pdf`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Download size={16} /> Download paper (PDF)
+        </a>
+        <a
+          className="action-btn"
+          href="https://events2.saip.org.za/event/2/overview"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <ExternalLink size={16} /> SAIP 2026 Conference
+        </a>
+      </div>
+    </div>
+
+    <div className="equation-card full-width">
+      <h3><Sparkles size={20} /> Key findings</h3>
+      <ul style={{ lineHeight: 1.7, paddingLeft: '1.2rem' }}>
+        <li><strong>Validated spectral solver.</strong> The Spectral Quasi-linearisation Method (SQLM)
+          is validated against four exact analytical limiting cases to machine precision (error below
+          10⁻¹² at N = 100) and reaches grid independence at only N = 10 collocation points.</li>
+        <li><strong>Material selection reverses under a magnetic field.</strong> The electrical
+          conductivity ratio A₂ governs material choice in MHD flow, overturning the usual
+          thermal conductivity criterion. At φ = 0.10, Al₂O₃ lowers total entropy about 6% below pure
+          water by suppressing Joule heating (A₂ &lt; 1), whereas Cu raises it about 35%.</li>
+        <li><strong>Slip is a uniquely powerful lever.</strong> Increasing the partial slip reduces
+          drag by 67%, peak temperature by 85% and total entropy by 87% at the same time (base fluid).</li>
+        <li><strong>Reynolds number dominates, and the lower wall is always a heat sink.</strong>
+          Reynolds number outweighs every other parameter, raising the maximum entropy generation more
+          than 2000-fold between Re = 0.1 and Re = 5 (near-quadratic scaling). The stationary lower wall
+          absorbs heat at every Reynolds number (Nu(0) stays negative), with |Nu(0)| growing from about
+          1.8×10⁻⁴ at Re = 0.1 to 0.17 at Re = 5.</li>
+        <li><strong>Machine-learning surrogate.</strong> A multilayer-perceptron trained on 9 000 SQLM
+          solutions reaches an average R² = 0.9958 on held-out test data and ranks parameter importance
+          as Re far above Ha and Ec, then Bi.</li>
+      </ul>
+      <p className="equation-description" style={{ marginTop: '0.5rem' }}>
+        Summary drawn from the paper's own abstract and conclusions.
+      </p>
+    </div>
+  </div>
+);
+
   return (
 
   <div className="app">
@@ -5662,6 +5738,7 @@ const renderValidation = () => (
             { id: 'videos', icon: Video, label: 'Videos' },
             { id: 'figures', icon: Image, label: 'Figures' },
             { id: 'theory', icon: BookOpen, label: 'Theory' },
+            { id: 'paper', icon: FileText, label: 'Published Paper' },
             { id: 'validation', icon: Award, label: 'Validation' }
           ].map(tab => (
             <button
@@ -5686,6 +5763,7 @@ const renderValidation = () => (
       {activeTab === 'videos' && renderVideos()}
       {activeTab === 'figures' && renderFigures()}
       {activeTab === 'theory' && renderTheory()}
+      {activeTab === 'paper' && renderPaper()}
       {activeTab === 'validation' && renderValidation()}
     </main>
     
